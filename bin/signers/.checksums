@@ -1,0 +1,17 @@
+# Binary Integrity Checksums
+# These are the official binaries from the Lighter GitHub repository
+# Verify checksums match before loading libraries in production
+
+# SHA-256 checksums for signer binaries
+# To verify: sha256sum bin/signers/signer-amd64.so
+# To verify: shasum -a 256 bin/signers/signer-arm64.dylib
+
+# IMPORTANT: Replace these with the actual SHA-256 checksums from official Lighter releases
+# Example format (update with real values):
+# signer-amd64.so: <SHA256_HASH>
+# signer-arm64.dylib: <SHA256_HASH>
+
+# To generate checksums:
+# Linux: sha256sum bin/signers/signer-amd64.so
+# macOS: shasum -a 256 bin/signers/signer-arm64.dylib
+
