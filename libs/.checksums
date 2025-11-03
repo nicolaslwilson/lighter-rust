@@ -1,0 +1,19 @@
+# SHA-256 Checksums for Lighter Signer Libraries
+# These checksums verify the integrity of the official signer libraries
+# from the Lighter GitHub repository.
+#
+# To verify all files:
+#   cd libs && shasum -a 256 -c .checksums
+#
+# To verify a single file:
+#   shasum -a 256 <file> | grep <expected-hash>
+#
+# Format: SHA256_HASH  RELATIVE_PATH
+9573239356aaa8100eafd936a0a32f76c9a28d6afd730840ac0afc480befbfa3  darwin/arm64/liblighter-signer.dylib
+a3c89f7af702bb51b32a38fc6940ac561798c756d808fea9c4f65f8d5dadff06  darwin/arm64/liblighter-signer.h
+b75c0fafdfdc2b7e4136967ebf795f4e60f5dde1285b9319456210615bdbc8dd  linux/amd64/liblighter-signer.h
+a57be2dc2571cadf1e1e9b18326d89982235360b5c8a0b1013af242bee420497  linux/amd64/liblighter-signer.so
+b75c0fafdfdc2b7e4136967ebf795f4e60f5dde1285b9319456210615bdbc8dd  linux/arm64/liblighter-signer.h
+daa76a69d20c5c8cd3447b214884532111d02f2c2dddb64675119010e4fa41d1  linux/arm64/liblighter-signer.so
+abf6d9ab48e9a0d313b2aab7a4130350614ae9c6d0e0a802effdde7cce0778fd  windows/amd64/liblighter-signer.dll
+c3a87644a9a31973b689e4f2b150a2a293981897a640bc06b13705ae8f32169d  windows/amd64/liblighter-signer.h
