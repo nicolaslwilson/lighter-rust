@@ -1,318 +1,233 @@
-use crate::client::{ApiClient, SignerClient};
-use crate::error::Result;
-use crate::models::{
-    common::{OrderType, Side},
-    order::{CancelAllOrdersRequest, CancelOrderRequest, CreateOrderRequest, TimeInForce},
-    ApiResponse, Order, OrderFilter, Pagination, Trade,
+#![allow(clippy::too_many_arguments)]
+use crate::{
+    apis::{self, configuration::Configuration},
+    config::LighterConfig,
+    models::{
+        order::{TimeInForce, Type as OrderType},
+        ExchangeStats, ExportData, OrderBookDetails, OrderBookOrders, OrderBooks, Orders, Trades,
+    },
+    Result,
 };
-use crate::signers::{
-    sign_cancel_all_orders_payload, sign_cancel_order_payload, sign_order_payload,
-};
-use std::sync::Arc;
+
+#[derive(Debug, Clone, strum::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum ExportType {
+    Funding,
+    Trade,
+}
+
+#[derive(Debug, Clone, strum::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum TradesSortBy {
+    BlockHeight,
+    Timestamp,
+    TradeId,
+}
+
+#[derive(Debug, Clone, strum::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum TradesSortDir {
+    Desc,
+}
+
+#[allow(clippy::enum_variant_names)]
+#[derive(Debug, Clone)]
+#[repr(u8)]
+pub enum GroupingType {
+    OneTriggersOther = 1,
+    OneCancelsOther = 2,
+    OneTriggersAndOneCancelsOther = 3,
+}
+
+impl From<crate::models::order::Type> for u8 {
+    fn from(val: crate::models::order::Type) -> Self {
+        match val {
+            OrderType::Limit => 0,
+            OrderType::Market => 1,
+            OrderType::StopLoss => 2,
+            OrderType::StopLossLimit => 3,
+            OrderType::TakeProfit => 4,
+            OrderType::TakeProfitLimit => 5,
+            OrderType::Twap => 6,
+            OrderType::TwapSub => 7,
+            OrderType::Liquidation => 8,
+        }
+    }
+}
+
+impl From<crate::models::order::TimeInForce> for u8 {
+    fn from(val: crate::models::order::TimeInForce) -> Self {
+        match val {
+            TimeInForce::ImmediateOrCancel => 0,
+            TimeInForce::GoodTillTime => 1,
+            TimeInForce::PostOnly => 2,
+            TimeInForce::Unknown => 3,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct OrderApi {
-    client: ApiClient,
-    signer_client: Arc<SignerClient>,
+    config: apis::configuration::Configuration,
 }
 
 impl OrderApi {
-    pub fn new(signer_client: SignerClient) -> Self {
-        let client = signer_client.api_client().clone();
-        Self {
-            client,
-            signer_client: Arc::new(signer_client),
-        }
+    pub fn new(config: &LighterConfig) -> Result<Self> {
+        Ok(Self {
+            config: Configuration::try_from(config)?,
+        })
     }
 
-    pub async fn get_order(&self, order_id: &str) -> Result<Order> {
-        let response: ApiResponse<Order> =
-            self.client.get(&format!("/orders/{}", order_id)).await?;
-
-        match response.data {
-            Some(order) => Ok(order),
-            None => Err(crate::error::LighterError::Api {
-                status: 404,
-                message: response.error.unwrap_or("Not found".to_string()),
-            }),
-        }
-    }
-
-    pub async fn get_orders(
+    /// Get account active orders. `auth` can be generated using the SDK.
+    pub async fn account_active_orders(
         &self,
-        filter: Option<OrderFilter>,
-    ) -> Result<(Vec<Order>, Option<Pagination>)> {
-        let endpoint = build_orders_endpoint(filter.as_ref());
+        account_index: i64,
+        market_id: i32,
+        authorization: Option<&str>,
+        auth: Option<&str>,
+    ) -> Result<Orders> {
+        let resp = apis::order_api::account_active_orders(
+            &self.config,
+            account_index,
+            market_id,
+            authorization,
+            auth,
+        )
+        .await
+        .inspect_err(|e| tracing::error!("unable to call `account_active_orders`: {e}"))?;
 
-        let response: ApiResponse<serde_json::Value> = self.client.get(&endpoint).await?;
-
-        match response.data {
-            Some(data) => {
-                let orders: Vec<Order> = serde_json::from_value(
-                    data.get("orders")
-                        .cloned()
-                        .unwrap_or(serde_json::Value::Array(vec![])),
-                )
-                .unwrap_or_default();
-
-                let pagination: Option<Pagination> = data
-                    .get("pagination")
-                    .and_then(|p| serde_json::from_value(p.clone()).ok());
-
-                Ok((orders, pagination))
-            }
-            None => Err(crate::error::LighterError::Api {
-                status: 500,
-                message: response.error.unwrap_or("Failed".to_string()),
-            }),
-        }
+        Ok(resp)
     }
 
-    pub async fn get_trades(&self, symbol: Option<&str>) -> Result<Vec<Trade>> {
-        let endpoint = match symbol {
-            Some(sym) => format!("/trades?symbol={}", sym),
-            None => "/trades".to_string(),
-        };
-
-        let response: ApiResponse<Vec<Trade>> = self.client.get(&endpoint).await?;
-
-        match response.data {
-            Some(trades) => Ok(trades),
-            None => Err(crate::error::LighterError::Api {
-                status: 500,
-                message: response.error.unwrap_or("Failed".to_string()),
-            }),
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub async fn create_order(
+    /// Get account inactive orders
+    pub async fn account_inactive_orders(
         &self,
-        symbol: &str,
-        side: Side,
-        order_type: OrderType,
-        quantity: &str,
-        price: Option<&str>,
-        stop_price: Option<&str>,
-        client_order_id: Option<&str>,
-        time_in_force: Option<TimeInForce>,
-        post_only: Option<bool>,
-        reduce_only: Option<bool>,
-    ) -> Result<Order> {
-        // Get nonce and signature
-        let nonce = self.signer_client.generate_nonce()?;
+        account_index: i64,
+        limit: i64,
+        authorization: Option<&str>,
+        auth: Option<&str>,
+        market_id: Option<i32>,
+        ask_filter: Option<i32>,
+        between_timestamps: Option<&str>,
+        cursor: Option<&str>,
+    ) -> Result<Orders> {
+        let resp = apis::order_api::account_inactive_orders(
+            &self.config,
+            account_index,
+            limit,
+            authorization,
+            auth,
+            market_id,
+            ask_filter,
+            between_timestamps,
+            cursor,
+        )
+        .await
+        .inspect_err(|e| tracing::error!("unable to call `account_inactive_orders`: {e}"))?;
 
-        let price_owned = price.map(str::to_string);
-        let stop_price_owned = stop_price.map(str::to_string);
-        let client_order_id_owned = client_order_id.map(str::to_string);
-        let time_in_force_value = time_in_force.unwrap_or(TimeInForce::Gtc);
-
-        let signature = sign_order_payload(
-            self.signer_client.signer().as_ref(),
-            symbol,
-            side,
-            order_type,
-            quantity,
-            price_owned.as_deref(),
-            stop_price_owned.as_deref(),
-            client_order_id_owned.as_deref(),
-            time_in_force_value,
-            post_only,
-            reduce_only,
-            nonce,
-        )?;
-
-        let request = CreateOrderRequest {
-            symbol: symbol.to_string(),
-            side,
-            order_type,
-            quantity: quantity.to_string(),
-            price: price_owned,
-            stop_price: stop_price_owned,
-            time_in_force: time_in_force_value,
-            client_order_id: client_order_id_owned,
-            nonce,
-            signature,
-            post_only,
-            reduce_only,
-        };
-
-        let response: ApiResponse<Order> = self
-            .signer_client
-            .post_signed("/orders", Some(&request))
-            .await?;
-
-        match response.data {
-            Some(order) => Ok(order),
-            None => Err(crate::error::LighterError::Api {
-                status: 500,
-                message: response
-                    .error
-                    .unwrap_or("Failed to create order".to_string()),
-            }),
-        }
+        Ok(resp)
     }
 
-    pub async fn cancel_order(
+    /// Get exchange stats
+    pub async fn exchange_stats(&self) -> Result<ExchangeStats> {
+        let resp = apis::order_api::exchange_stats(&self.config)
+            .await
+            .inspect_err(|e| tracing::error!("unable to call `exchange_stats`: {e}"))?;
+
+        Ok(resp)
+    }
+
+    /// Export data
+    pub async fn export(
         &self,
-        order_id: Option<&str>,
-        client_order_id: Option<&str>,
-        symbol: Option<&str>,
-    ) -> Result<()> {
-        if order_id.is_none() && (client_order_id.is_none() || symbol.is_none()) {
-            return Err(crate::error::LighterError::Api {
-                status: 400,
-                message: "Must provide either order_id or both client_order_id and symbol"
-                    .to_string(),
-            });
-        }
+        export_type: ExportType,
+        authorization: Option<&str>,
+        auth: Option<&str>,
+        account_index: Option<i64>,
+        market_id: Option<i32>,
+    ) -> Result<ExportData> {
+        let resp = apis::order_api::export(
+            &self.config,
+            &export_type.to_string(),
+            authorization,
+            auth,
+            account_index,
+            market_id,
+        )
+        .await
+        .inspect_err(|e| tracing::error!("unable to call `export`: {e}"))?;
 
-        let nonce = self.signer_client.generate_nonce()?;
-        let signature = sign_cancel_order_payload(
-            self.signer_client.signer().as_ref(),
-            order_id,
-            client_order_id,
-            symbol,
-            nonce,
-        )?;
-
-        let request = CancelOrderRequest {
-            order_id: order_id.map(str::to_string),
-            client_order_id: client_order_id.map(str::to_string),
-            symbol: symbol.map(str::to_string),
-            signature,
-            nonce,
-        };
-
-        let response: ApiResponse<serde_json::Value> = self
-            .signer_client
-            .post_signed("/orders/cancel", Some(&request))
-            .await?;
-
-        if let Some(error) = response.error {
-            return Err(crate::error::LighterError::Api {
-                status: 500,
-                message: error,
-            });
-        }
-
-        Ok(())
+        Ok(resp)
     }
 
-    pub async fn cancel_all_orders(&self, symbol: Option<&str>) -> Result<u32> {
-        let nonce = self.signer_client.generate_nonce()?;
-        let signature =
-            sign_cancel_all_orders_payload(self.signer_client.signer().as_ref(), symbol, nonce)?;
+    /// Get order books metadata
+    pub async fn order_book_details(&self, market_id: Option<i32>) -> Result<OrderBookDetails> {
+        let resp = apis::order_api::order_book_details(&self.config, market_id)
+            .await
+            .inspect_err(|e| tracing::error!("unable to call `order_book_details`: {e}"))?;
 
-        let request = CancelAllOrdersRequest {
-            symbol: symbol.map(str::to_string),
-            signature,
-            nonce,
-        };
-
-        let response: ApiResponse<u32> = self
-            .signer_client
-            .post_signed("/orders/cancel-all", Some(&request))
-            .await?;
-
-        if let Some(error) = response.error {
-            return Err(crate::error::LighterError::Api {
-                status: 500,
-                message: error,
-            });
-        }
-
-        match response.data {
-            Some(count) => Ok(count),
-            None => Err(crate::error::LighterError::Api {
-                status: 500,
-                message: "Missing cancellation count".to_string(),
-            }),
-        }
-    }
-}
-
-fn build_orders_endpoint(filter: Option<&OrderFilter>) -> String {
-    let mut query_params = Vec::new();
-
-    if let Some(filter) = filter {
-        if let Some(symbol) = filter.symbol.as_ref() {
-            query_params.push(format!("symbol={}", symbol));
-        }
-        if let Some(status) = filter.status {
-            query_params.push(format!("status={}", status.as_str()));
-        }
-        if let Some(side) = filter.side {
-            query_params.push(format!("side={}", side.as_str()));
-        }
-        if let Some(order_type) = filter.order_type {
-            query_params.push(format!("orderType={}", order_type.as_str()));
-        }
-        if let Some(start_time) = filter.start_time.as_ref() {
-            query_params.push(format!("startTime={}", start_time.timestamp_millis()));
-        }
-        if let Some(end_time) = filter.end_time.as_ref() {
-            query_params.push(format!("endTime={}", end_time.timestamp_millis()));
-        }
-        if let Some(page) = filter.page {
-            query_params.push(format!("page={}", page));
-        }
-        if let Some(limit) = filter.limit {
-            query_params.push(format!("limit={}", limit));
-        }
+        Ok(resp)
     }
 
-    if query_params.is_empty() {
-        "/orders".to_string()
-    } else {
-        format!("/orders?{}", query_params.join("&"))
-    }
-}
+    /// Get order book orders
+    pub async fn order_book_orders(&self, market_id: i32, limit: i64) -> Result<OrderBookOrders> {
+        let resp = apis::order_api::order_book_orders(&self.config, market_id, limit)
+            .await
+            .inspect_err(|e| tracing::error!("unable to call `order_book_orders`: {e}"))?;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{OrderStatus, OrderType, Side};
-    use chrono::{TimeZone, Timelike, Utc};
-
-    #[test]
-    fn build_orders_endpoint_without_filters_returns_base_path() {
-        assert_eq!(build_orders_endpoint(None), "/orders");
+        Ok(resp)
     }
 
-    #[test]
-    fn build_orders_endpoint_serializes_filters_in_api_format() {
-        let filter = OrderFilter {
-            symbol: Some("BTC-USDC".to_string()),
-            status: Some(OrderStatus::Open),
-            side: Some(Side::Buy),
-            order_type: Some(OrderType::Limit),
-            start_time: Some(
-                Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0)
-                    .unwrap()
-                    .with_nanosecond(123_000_000)
-                    .unwrap(),
-            ),
-            end_time: Some(
-                Utc.with_ymd_and_hms(2024, 1, 2, 0, 0, 0)
-                    .unwrap()
-                    .with_nanosecond(456_000_000)
-                    .unwrap(),
-            ),
-            page: Some(2),
-            limit: Some(50),
-        };
+    /// Get order books metadata.<hr>**Response Description:**<br><br>1) **Taker and maker fees** are in percentage.<br>2) **Min base amount:** The amount of base token that can be traded in a single order.<br>3) **Min quote amount:** The amount of quote token that can be traded in a single order.<br>4) **Supported size decimals:** The number of decimal places that can be used for the size of the order.<br>5) **Supported price decimals:** The number of decimal places that can be used for the price of the order.<br>6) **Supported quote decimals:** Size Decimals + Quote Decimals.
+    pub async fn order_books(&self, market_id: Option<i32>) -> Result<OrderBooks> {
+        let resp = apis::order_api::order_books(&self.config, market_id)
+            .await
+            .inspect_err(|e| tracing::error!("unable to call `order_books`: {e}"))?;
 
-        let endpoint = build_orders_endpoint(Some(&filter));
+        Ok(resp)
+    }
 
-        assert!(endpoint.starts_with("/orders?"));
-        assert!(endpoint.contains("symbol=BTC-USDC"));
-        assert!(endpoint.contains("status=OPEN"));
-        assert!(endpoint.contains("side=BUY"));
-        assert!(endpoint.contains("orderType=LIMIT"));
-        assert!(endpoint.contains("startTime=1704067200123"));
-        assert!(endpoint.contains("endTime=1704153600456"));
-        assert!(endpoint.contains("page=2"));
-        assert!(endpoint.contains("limit=50"));
+    /// Get recent trades
+    pub async fn recent_trades(&self, market_id: i32, limit: i64) -> Result<Trades> {
+        let resp = apis::order_api::recent_trades(&self.config, market_id, limit)
+            .await
+            .inspect_err(|e| tracing::error!("unable to call `recent_trades`: {e}"))?;
+
+        Ok(resp)
+    }
+
+    /// Get trades
+    pub async fn trades(
+        &self,
+        sort_by: TradesSortBy,
+        limit: i64,
+        authorization: Option<&str>,
+        auth: Option<&str>,
+        market_id: Option<i32>,
+        account_index: Option<i64>,
+        order_index: Option<i64>,
+        sort_dir: Option<TradesSortDir>,
+        cursor: Option<&str>,
+        from: Option<i64>,
+        ask_filter: Option<i32>,
+    ) -> Result<Trades> {
+        let resp = apis::order_api::trades(
+            &self.config,
+            &sort_by.to_string(),
+            limit,
+            authorization,
+            auth,
+            market_id,
+            account_index,
+            order_index,
+            sort_dir.map(|v| v.to_string()).as_deref(),
+            cursor,
+            from,
+            ask_filter,
+        )
+        .await
+        .inspect_err(|e| tracing::error!("unable to call `trades`: {e}"))?;
+
+        Ok(resp)
     }
 }

@@ -1,345 +1,79 @@
-# CandlestickApi
+# \CandlestickApi
 
-All URIs are relative to *https://api.lighter.xyz*
+All URIs are relative to *https://mainnet.zklighter.elliot.ai*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**get_candlesticks**](CandlestickApi.md#get_candlesticks) | **GET** /candlesticks | Get candlestick data
-[**get_market_stats**](CandlestickApi.md#get_market_stats) | **GET** /market/stats/{symbol} | Get market statistics
-[**get_all_market_stats**](CandlestickApi.md#get_all_market_stats) | **GET** /market/stats | Get all market statistics
-[**get_ticker**](CandlestickApi.md#get_ticker) | **GET** /ticker/{symbol} | Get ticker
-[**get_all_tickers**](CandlestickApi.md#get_all_tickers) | **GET** /ticker | Get all tickers
-[**get_order_book**](CandlestickApi.md#get_order_book) | **GET** /orderbook/{symbol} | Get order book
+[**candlesticks**](CandlestickApi.md#candlesticks) | **GET** /api/v1/candlesticks | candlesticks
+[**fundings**](CandlestickApi.md#fundings) | **GET** /api/v1/fundings | fundings
 
-## get_candlesticks
 
-> Vec<Candlestick> get_candlesticks(symbol, interval, start_time, end_time, limit)
 
-Get candlestick data
+## candlesticks
 
-Returns OHLCV candlestick data for a trading pair.
+> models::Candlesticks candlesticks(market_id, resolution, start_timestamp, end_timestamp, count_back, set_timestamp_to_end)
+candlesticks
 
-### Example
-
-```rust
-use lighter_rust::{LighterClient, Config, CandlestickInterval};
-use chrono::{Utc, Duration};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new()
-        .with_api_key("your-api-key");
-    
-    let client = LighterClient::new_read_only(config)?;
-    
-    // Get last 100 1-hour candles for BTC-USDC
-    let candlesticks = client.market_data().get_candlesticks(
-        "BTC-USDC",
-        CandlestickInterval::OneHour,
-        Some(Utc::now() - Duration::hours(100)),
-        Some(Utc::now()),
-        Some(100),
-    ).await?;
-    
-    for candle in candlesticks {
-        println!("Time: {} O:{} H:{} L:{} C:{} V:{}", 
-            candle.open_time,
-            candle.open,
-            candle.high,
-            candle.low,
-            candle.close,
-            candle.volume
-        );
-    }
-    
-    Ok(())
-}
-```
+Get candlesticks
 
 ### Parameters
+
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**symbol** | **String** | Trading pair symbol | [required] |
-**interval** | [**CandlestickInterval**](CandlestickInterval.md) | Candlestick interval | [required] |
-**start_time** | **Option<DateTime<Utc>>** | Start time | [optional] |
-**end_time** | **Option<DateTime<Utc>>** | End time | [optional] |
-**limit** | **Option<u32>** | Max number of results | [optional] [default to 500]
+**market_id** | **i32** |  | [required] |
+**resolution** | **String** |  | [required] |
+**start_timestamp** | **i64** |  | [required] |
+**end_timestamp** | **i64** |  | [required] |
+**count_back** | **i64** |  | [required] |
+**set_timestamp_to_end** | Option<**bool**> |  |  |[default to false]
 
 ### Return type
 
-[**Vec<Candlestick>**](Candlestick.md)
+[**models::Candlesticks**](Candlesticks.md)
 
 ### Authorization
 
-[ApiKeyAuth](../README.md#ApiKeyAuth)
+No authorization required
 
 ### HTTP request headers
 
 - **Content-Type**: Not defined
 - **Accept**: application/json
 
-## get_market_stats
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
-> MarketStats get_market_stats(symbol)
 
-Get market statistics
+## fundings
 
-Returns 24-hour market statistics for a trading pair.
+> models::Fundings fundings(market_id, resolution, start_timestamp, end_timestamp, count_back)
+fundings
 
-### Example
-
-```rust
-use lighter_rust::{LighterClient, Config};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new()
-        .with_api_key("your-api-key");
-    
-    let client = LighterClient::new_read_only(config)?;
-    
-    let stats = client.market_data()
-        .get_market_stats("BTC-USDC")
-        .await?;
-    
-    println!("Symbol: {}", stats.symbol);
-    println!("Last Price: {}", stats.last_price);
-    println!("24h Change: {}%", stats.price_change_percent);
-    println!("24h Volume: {}", stats.volume);
-    println!("24h High: {}", stats.high_price);
-    println!("24h Low: {}", stats.low_price);
-    
-    Ok(())
-}
-```
+Get fundings
 
 ### Parameters
+
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**symbol** | **String** | Trading pair symbol | [required] |
+**market_id** | **i32** |  | [required] |
+**resolution** | **String** |  | [required] |
+**start_timestamp** | **i64** |  | [required] |
+**end_timestamp** | **i64** |  | [required] |
+**count_back** | **i64** |  | [required] |
 
 ### Return type
 
-[**MarketStats**](MarketStats.md)
+[**models::Fundings**](Fundings.md)
 
 ### Authorization
 
-None
+No authorization required
 
 ### HTTP request headers
 
 - **Content-Type**: Not defined
 - **Accept**: application/json
 
-## get_all_market_stats
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
-> Vec<MarketStats> get_all_market_stats()
-
-Get all market statistics
-
-Returns 24-hour market statistics for all trading pairs.
-
-### Example
-
-```rust
-use lighter_rust::{LighterClient, Config};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new();
-    
-    let client = LighterClient::new_read_only(config)?;
-    
-    let all_stats = client.market_data()
-        .get_all_market_stats()
-        .await?;
-    
-    for stats in all_stats {
-        println!("{}: {} ({}%)", 
-            stats.symbol,
-            stats.last_price,
-            stats.price_change_percent
-        );
-    }
-    
-    Ok(())
-}
-```
-
-### Parameters
-
-This endpoint does not need any parameter.
-
-### Return type
-
-[**Vec<MarketStats>**](MarketStats.md)
-
-### Authorization
-
-None
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json
-
-## get_ticker
-
-> Ticker get_ticker(symbol)
-
-Get ticker
-
-Returns current ticker information for a trading pair.
-
-### Example
-
-```rust
-use lighter_rust::{LighterClient, Config};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new();
-    
-    let client = LighterClient::new_read_only(config)?;
-    
-    let ticker = client.market_data()
-        .get_ticker("BTC-USDC")
-        .await?;
-    
-    println!("BTC-USDC Price: {}", ticker.price);
-    println!("Updated: {}", ticker.timestamp);
-    
-    Ok(())
-}
-```
-
-### Parameters
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**symbol** | **String** | Trading pair symbol | [required] |
-
-### Return type
-
-[**Ticker**](Ticker.md)
-
-### Authorization
-
-None
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json
-
-## get_all_tickers
-
-> Vec<Ticker> get_all_tickers()
-
-Get all tickers
-
-Returns current ticker information for all trading pairs.
-
-### Example
-
-```rust
-use lighter_rust::{LighterClient, Config};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new();
-    
-    let client = LighterClient::new_read_only(config)?;
-    
-    let tickers = client.market_data()
-        .get_all_tickers()
-        .await?;
-    
-    for ticker in tickers {
-        println!("{}: {}", ticker.symbol, ticker.price);
-    }
-    
-    Ok(())
-}
-```
-
-### Parameters
-
-This endpoint does not need any parameter.
-
-### Return type
-
-[**Vec<Ticker>**](Ticker.md)
-
-### Authorization
-
-None
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json
-
-## get_order_book
-
-> OrderBook get_order_book(symbol, depth)
-
-Get order book
-
-Returns the current order book for a trading pair.
-
-### Example
-
-```rust
-use lighter_rust::{LighterClient, Config};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new();
-    
-    let client = LighterClient::new_read_only(config)?;
-    
-    // Get order book with depth of 20 levels
-    let order_book = client.market_data()
-        .get_order_book("BTC-USDC", Some(20))
-        .await?;
-    
-    println!("Best Bid: {} @ {}", 
-        order_book.bids[0].quantity,
-        order_book.bids[0].price
-    );
-    
-    println!("Best Ask: {} @ {}", 
-        order_book.asks[0].quantity,
-        order_book.asks[0].price
-    );
-    
-    let spread = order_book.asks[0].price.parse::<f64>()? 
-        - order_book.bids[0].price.parse::<f64>()?;
-    println!("Spread: {:.2}", spread);
-    
-    Ok(())
-}
-```
-
-### Parameters
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**symbol** | **String** | Trading pair symbol | [required] |
-**depth** | **Option<u32>** | Order book depth | [optional] [default to 20]
-
-### Return type
-
-[**OrderBook**](OrderBook.md)
-
-### Authorization
-
-None
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json

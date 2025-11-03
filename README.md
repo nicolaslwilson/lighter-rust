@@ -26,31 +26,30 @@ lighter-rust = { git = "https://github.com/yongkangc/lighter-rust" }
 ## Quick Start
 
 ```rust
-use lighter_rust::{LighterClient, Config};
+use lighter_rust::{LighterClient, Config, api::account::AccountBy};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create configuration
-    let config = Config::new()
-        .with_api_key("your-api-key")
-        .with_base_url("https://api.lighter.xyz")?;
-
-    // Initialize client with private key for trading
-    let client = LighterClient::new(config, "your-private-key")?;
-    
-    // Get account info
-    let account = client.account().get_account().await?;
+async fn main() -> Result<()> {
+    let config = LighterConfig::new()
+        .with_api_key_private(YOUR_API_KEY_PRIVATE)
+        .with_account_index(YOUR_ACCOUNT_INDEX)
+        .with_api_key_index(YOUR_API_KEY_INDEX);
+    let client = HttpClient::builder()
+        .with_config(config)
+        .with_account()
+        .build()?;
+    let account = client
+        .api()
+        .account()?
+        .account(AccountBy::L1Address, YOUR_ACCOUNT_ADDRESS)
+        .await?;
     println!("Account: {:?}", account);
-    
-    // Get market data
-    let ticker = client.market_data().get_ticker("BTC-USDC").await?;
-    println!("BTC-USDC Price: {}", ticker.price);
     
     Ok(())
 }
 ```
 
-## Examples
+<!-- ## Examples
 
 Check out the [examples](./examples) directory for comprehensive examples:
 
@@ -65,49 +64,26 @@ Run examples with:
 cargo run --example basic_usage
 cargo run --example websocket_example
 cargo run --example trading_bot
-```
+``` -->
 
 ## Documentation
 
-### API Documentation
+### API Documentation & Coverage
 
 - [**AccountApi**](./docs/AccountApi.md) - Account management operations
-- [**OrderApi**](./docs/OrderApi.md) - Order placement and management
-- [**TransactionApi**](./docs/TransactionApi.md) - Transaction history and tracking
+- [**AnnouncementApi**](./docs/AnnouncementApi.md) - Announcement operations
+- [**BlockApi**](./docs/BlockApi.md) - Info related to the network blocks
+- [**BridgeApi**](./docs/BridgeApi.md) - Fastbridge info
 - [**CandlestickApi**](./docs/CandlestickApi.md) - Market data and OHLCV
-- [**WebSocketClient**](./docs/WebSocketClient.md) - Real-time data streaming
+- [**FundingApi**](./docs/FundingApi.md) - Info regarding the funding rates
+- [**InfoApi**](./docs/InfoApi.md) - Other info
+- [**NotificationApi**](./docs/NotificationApi.md) - Notifications operations
+- [**OrderApi**](./docs/OrderApi.md) - Order placement and management
+- [**ReferralApi**](./docs/ReferralApi.md) - Info related to referrals
+- [**RootApi**](./docs/RootApi.md) - General platform info
+- [**TransactionApi**](./docs/TransactionApi.md) - Transaction history and tracking
 
-### Guides
-
-- [**Integration Guide**](./docs/IntegrationGuide.md) - Complete integration walkthrough
-- [**API Reference**](./docs/README.md) - Full API method reference
-
-## API Coverage
-
-### Account Management
-- Get account information
-- Get account statistics  
-- Change account tier
-- Get balances and positions
-
-### Trading Operations
-- Create orders (market, limit, stop-loss, take-profit)
-- Cancel orders (single or all)
-- Get order history
-- Get trade history
-
-### Market Data
-- Candlestick/OHLCV data
-- Tickers
-- Order book depth
-- Market statistics
-
-### WebSocket Streams
-- Order book updates
-- Trade streams
-- Account updates
-
-## Architecture
+<!-- ## Architecture
 
 The SDK is built with a modular architecture:
 
@@ -119,14 +95,9 @@ lighter-rust/
 │   ├── models/          # Data models and types
 │   ├── signers/         # Ethereum signing (Alloy)
 │   └── error.rs         # Error handling
-```
+``` -->
 
-## Requirements
-
-- Rust 1.70+
-- Tokio runtime
-
-## Development
+<!-- ## Development
 
 ```bash
 # Build
@@ -140,37 +111,8 @@ cargo run --example basic_usage
 
 # Build documentation
 cargo doc --open
-```
+``` -->
 
-## Configuration
-
-The SDK can be configured through the `Config` struct:
-
-```rust
-use lighter_rust::Config;
-
-let config = Config::new()
-    .with_api_key("your-api-key")
-    .with_base_url("https://api.lighter.xyz")?
-    .with_ws_url("wss://ws.lighter.xyz")?
-    .with_timeout(30)
-    .with_max_retries(3);
-```
-
-## Error Handling
-
-All methods return a `Result<T, LighterError>` with comprehensive error types:
-
-```rust
-use lighter_rust::LighterError;
-
-match client.orders().create_order(...).await {
-    Ok(order) => println!("Order created: {}", order.id),
-    Err(LighterError::RateLimit) => println!("Rate limited, please retry"),
-    Err(LighterError::Auth(msg)) => println!("Authentication failed: {}", msg),
-    Err(e) => println!("Error: {}", e),
-}
-```
 
 ## Contributing
 
@@ -188,9 +130,9 @@ This is an unofficial SDK. Use at your own risk. Always test thoroughly before u
 
 For issues and questions:
 - Open an issue on [GitHub](https://github.com/yongkangc/lighter-rust/issues)
-- Check the [API documentation](https://apibetadocs.lighter.xyz/docs)
+- Check the [API documentation](https://apidocs.lighter.xyz/docs/get-started-for-programmers-1)
 
 ## Related
 
-- [Lighter Python SDK](https://github.com/elliottech/lighter-python)
-- [Lighter API Docs](https://apibetadocs.lighter.xyz/docs)
+- [`lighter-python` SDK](https://github.com/elliottech/lighter-python)
+- [`lighter-go` signing module](https://github.com/elliottech/lighter-go)

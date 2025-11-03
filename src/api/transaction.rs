@@ -1,169 +1,223 @@
-use crate::client::SignerClient;
-use crate::error::Result;
-use crate::models::ApiResponse;
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+#![allow(clippy::too_many_arguments)]
+use crate::{
+    apis::{self, configuration::Configuration},
+    config::LighterConfig,
+    models::{
+        DepositHistory, EnrichedTx, NextNonce, RespSendTx, RespSendTxBatch, TransferHistory, Txs,
+        WithdrawHistory,
+    },
+    Result,
+};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Transaction {
-    pub id: String,
-    pub hash: String,
-    pub block_number: u64,
-    pub block_hash: String,
-    pub transaction_index: u32,
-    pub from_address: String,
-    pub to_address: Option<String>,
-    pub value: String,
-    pub gas_used: String,
-    pub gas_price: String,
-    pub status: TransactionStatus,
-    pub timestamp: DateTime<Utc>,
-    pub confirmations: u32,
+#[derive(Debug, strum::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum AccountTxsBy {
+    AccountIndex,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum TransactionStatus {
+#[derive(Debug, strum::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum BlockTxsBy {
+    BlockCommitment,
+    BlockHeight,
+}
+
+#[derive(Debug, strum::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum DepositHistoryFilter {
+    All,
     Pending,
-    Confirmed,
-    Failed,
-    Reverted,
+    Claimable,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Block {
-    pub number: u64,
-    pub hash: String,
-    pub parent_hash: String,
-    pub timestamp: DateTime<Utc>,
-    pub transaction_count: u32,
-    pub gas_used: String,
-    pub gas_limit: String,
-    pub miner: String,
+#[derive(Debug, strum::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum TxBy {
+    Hash,
+    SequenceIndex,
+}
+
+#[derive(Debug, strum::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum WithdrawHistoryFilter {
+    All,
+    Pending,
+    Claimable,
 }
 
 #[derive(Debug)]
 pub struct TransactionApi {
-    client: SignerClient,
+    config: apis::configuration::Configuration,
 }
 
 impl TransactionApi {
-    pub fn new(client: SignerClient) -> Self {
-        Self { client }
+    pub fn new(config: &LighterConfig) -> Result<Self> {
+        Ok(Self {
+            config: Configuration::try_from(config)?,
+        })
     }
 
-    pub async fn get_transaction(&self, tx_hash: &str) -> Result<Transaction> {
-        let response: ApiResponse<Transaction> = self
-            .client
-            .api_client()
-            .get(&format!("/transactions/{}", tx_hash))
-            .await?;
-
-        match response.data {
-            Some(transaction) => Ok(transaction),
-            None => Err(crate::error::LighterError::Api {
-                status: 404,
-                message: response
-                    .error
-                    .unwrap_or_else(|| "Transaction not found".to_string()),
-            }),
-        }
-    }
-
-    pub async fn get_transactions(
+    /// Get transactions of a specific account
+    pub async fn account_txs(
         &self,
-        address: &str,
-        page: Option<u32>,
-        limit: Option<u32>,
-    ) -> Result<Vec<Transaction>> {
-        let mut query_params = vec![format!("address={}", address)];
+        limit: i64,
+        by: AccountTxsBy,
+        value: &str,
+        authorization: Option<&str>,
+        index: Option<i64>,
+        types: Option<Vec<i32>>,
+        auth: Option<&str>,
+    ) -> Result<Txs> {
+        let resp = apis::transaction_api::account_txs(
+            &self.config,
+            limit,
+            &by.to_string(),
+            value,
+            authorization,
+            index,
+            types,
+            auth,
+        )
+        .await
+        .inspect_err(|e| tracing::error!("unable to call `account_txs`: {e}"))?;
 
-        if let Some(page) = page {
-            query_params.push(format!("page={}", page));
-        }
-        if let Some(limit) = limit {
-            query_params.push(format!("limit={}", limit));
-        }
-
-        let endpoint = format!("/transactions?{}", query_params.join("&"));
-
-        let response: ApiResponse<Vec<Transaction>> =
-            self.client.api_client().get(&endpoint).await?;
-
-        match response.data {
-            Some(transactions) => Ok(transactions),
-            None => Err(crate::error::LighterError::Api {
-                status: 500,
-                message: response
-                    .error
-                    .unwrap_or_else(|| "Failed to fetch transactions".to_string()),
-            }),
-        }
+        Ok(resp)
     }
 
-    pub async fn get_block(&self, block_number: u64) -> Result<Block> {
-        let response: ApiResponse<Block> = self
-            .client
-            .api_client()
-            .get(&format!("/blocks/{}", block_number))
-            .await?;
+    /// Get transactions in a block
+    pub async fn block_txs(&self, by: BlockTxsBy, value: &str) -> Result<Txs> {
+        let resp = apis::transaction_api::block_txs(&self.config, &by.to_string(), value)
+            .await
+            .inspect_err(|e| tracing::error!("unable to call `block_txs`: {e}"))?;
 
-        match response.data {
-            Some(block) => Ok(block),
-            None => Err(crate::error::LighterError::Api {
-                status: 404,
-                message: response
-                    .error
-                    .unwrap_or_else(|| "Block not found".to_string()),
-            }),
-        }
+        Ok(resp)
     }
 
-    pub async fn get_latest_block(&self) -> Result<Block> {
-        let response: ApiResponse<Block> = self.client.api_client().get("/blocks/latest").await?;
-
-        match response.data {
-            Some(block) => Ok(block),
-            None => Err(crate::error::LighterError::Api {
-                status: 500,
-                message: response
-                    .error
-                    .unwrap_or_else(|| "Failed to fetch latest block".to_string()),
-            }),
-        }
-    }
-
-    pub async fn wait_for_confirmation(
+    /// Get deposit history
+    pub async fn deposit_history(
         &self,
-        tx_hash: &str,
-        required_confirmations: u32,
-    ) -> Result<Transaction> {
-        let mut attempts = 0;
-        let max_attempts = 60; // 5 minutes with 5-second intervals
+        account_index: i64,
+        l1_address: &str,
+        authorization: Option<&str>,
+        auth: Option<&str>,
+        cursor: Option<&str>,
+        filter: Option<DepositHistoryFilter>,
+    ) -> Result<DepositHistory> {
+        let resp = apis::transaction_api::deposit_history(
+            &self.config,
+            account_index,
+            l1_address,
+            authorization,
+            auth,
+            cursor,
+            filter.map(|v| v.to_string()).as_deref(),
+        )
+        .await
+        .inspect_err(|e| tracing::error!("unable to call `deposit_history`: {e}"))?;
 
-        loop {
-            if attempts >= max_attempts {
-                return Err(crate::error::LighterError::Unknown(format!(
-                    "Transaction {} not confirmed after {} attempts",
-                    tx_hash, max_attempts
-                )));
-            }
+        Ok(resp)
+    }
 
-            match self.get_transaction(tx_hash).await {
-                Ok(tx) => {
-                    if tx.confirmations >= required_confirmations {
-                        return Ok(tx);
-                    }
-                }
-                Err(e) => {
-                    if attempts == 0 {
-                        return Err(e);
-                    }
-                }
-            }
+    /// Get next nonce for a specific account and api key
+    pub async fn next_nonce(&self, account_index: i64, api_key_index: i32) -> Result<NextNonce> {
+        let resp = apis::transaction_api::next_nonce(&self.config, account_index, api_key_index)
+            .await
+            .inspect_err(|e| tracing::error!("unable to call `next_nonce`: {e}"))?;
 
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-            attempts += 1;
-        }
+        Ok(resp)
+    }
+
+    /// You need to sign the transaction body before sending it to the server. More details can be found in the Get Started docs: [Get Started For Programmers](https://apidocs.lighter.xyz/docs/get-started-for-programmers)
+    pub async fn send_tx(
+        &self,
+        tx_type: i32,
+        tx_info: &str,
+        price_protection: Option<bool>,
+    ) -> Result<RespSendTx> {
+        let resp = apis::transaction_api::send_tx(&self.config, tx_type, tx_info, price_protection)
+            .await
+            .inspect_err(|e| tracing::error!("unable to call `send_tx`: {e}"))?;
+
+        Ok(resp)
+    }
+
+    /// You need to sign the transaction body before sending it to the server. More details can be found in the Get Started docs: [Get Started For Programmers](https://apidocs.lighter.xyz/docs/get-started-for-programmers)
+    pub async fn send_tx_batch(&self, tx_types: &str, tx_infos: &str) -> Result<RespSendTxBatch> {
+        let resp = apis::transaction_api::send_tx_batch(&self.config, tx_types, tx_infos)
+            .await
+            .inspect_err(|e| tracing::error!("uanble to call `send_tx_batch`: {e}"))?;
+
+        Ok(resp)
+    }
+
+    /// Get transfer history
+    pub async fn transfer_history(
+        &self,
+        account_index: i64,
+        authorization: Option<&str>,
+        auth: Option<&str>,
+        cursor: Option<&str>,
+    ) -> Result<TransferHistory> {
+        let resp = apis::transaction_api::transfer_history(
+            &self.config,
+            account_index,
+            authorization,
+            auth,
+            cursor,
+        )
+        .await
+        .inspect_err(|e| tracing::error!("unable to call `transfer_history`: {e}"))?;
+
+        Ok(resp)
+    }
+
+    /// Get transaction by hash or sequence index
+    pub async fn tx(&self, by: TxBy, value: &str) -> Result<EnrichedTx> {
+        let resp = apis::transaction_api::tx(&self.config, &by.to_string(), value)
+            .await
+            .inspect_err(|e| tracing::error!("unable to call `tx`: {e}"))?;
+
+        Ok(resp)
+    }
+
+    /// Get L1 transaction by L1 transaction hash
+    pub async fn tx_from_l1_tx_hash(&self, hash: &str) -> Result<EnrichedTx> {
+        let resp = apis::transaction_api::tx_from_l1_tx_hash(&self.config, hash)
+            .await
+            .inspect_err(|e| tracing::error!("unable to call `tx_by_l1_tx_hash`: {e}"))?;
+
+        Ok(resp)
+    }
+
+    /// Get transactions which are already packed into blocks
+    pub async fn txs(&self, limit: i64, index: Option<i64>) -> Result<Txs> {
+        let resp = apis::transaction_api::txs(&self.config, limit, index)
+            .await
+            .inspect_err(|e| tracing::error!("unable to call `txs`: {e}"))?;
+
+        Ok(resp)
+    }
+
+    /// Get withdraw history
+    pub async fn withdraw_history(
+        &self,
+        account_index: i64,
+        authorization: Option<&str>,
+        auth: Option<&str>,
+        cursor: Option<&str>,
+        filter: Option<WithdrawHistoryFilter>,
+    ) -> Result<WithdrawHistory> {
+        let resp = apis::transaction_api::withdraw_history(
+            &self.config,
+            account_index,
+            authorization,
+            auth,
+            cursor,
+            filter.map(|v| v.to_string()).as_deref(),
+        )
+        .await
+        .inspect_err(|e| tracing::error!("unable to call `withdraw_history`: {e}"))?;
+
+        Ok(resp)
     }
 }

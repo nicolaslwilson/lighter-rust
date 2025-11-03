@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::apis;
+
 #[derive(Error, Debug)]
 pub enum LighterError {
     #[error("HTTP request failed: {0}")]
@@ -7,6 +9,12 @@ pub enum LighterError {
 
     #[error("JSON serialization/deserialization failed: {0}")]
     Json(#[from] serde_json::Error),
+
+    #[error("IO error: {0}")]
+    IO(#[from] std::io::Error),
+
+    #[error("Middleware error: {0}")]
+    Middleware(#[from] reqwest_middleware::Error),
 
     #[error("WebSocket error: {0}")]
     WebSocket(#[from] Box<tungstenite::Error>),
@@ -40,9 +48,27 @@ pub enum LighterError {
 
     #[error("Unknown error: {0}")]
     Unknown(String),
+
+    #[error("Generic error: {0}")]
+    Generic(String),
 }
 
 pub type Result<T> = std::result::Result<T, LighterError>;
+
+impl<T> From<apis::Error<T>> for LighterError {
+    fn from(value: apis::Error<T>) -> Self {
+        match value {
+            apis::Error::Reqwest(error) => LighterError::Http(Box::new(error)),
+            apis::Error::Middleware(error) => LighterError::Middleware(error),
+            apis::Error::Serde(error) => LighterError::Json(error),
+            apis::Error::Io(error) => LighterError::IO(error),
+            apis::Error::ResponseError(response_content) => LighterError::Api {
+                status: response_content.status.into(),
+                message: response_content.content,
+            },
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

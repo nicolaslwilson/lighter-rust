@@ -1,363 +1,310 @@
-# OrderApi
+# \OrderApi
 
-All URIs are relative to *https://api.lighter.xyz*
+All URIs are relative to *https://mainnet.zklighter.elliot.ai*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**create_order**](OrderApi.md#create_order) | **POST** /orders | Create a new order
-[**cancel_order**](OrderApi.md#cancel_order) | **POST** /orders/cancel | Cancel an order
-[**cancel_all_orders**](OrderApi.md#cancel_all_orders) | **POST** /orders/cancel-all | Cancel all orders
-[**get_order**](OrderApi.md#get_order) | **GET** /orders/{order_id} | Get order by ID
-[**get_orders**](OrderApi.md#get_orders) | **GET** /orders | Get orders with filters
-[**get_trades**](OrderApi.md#get_trades) | **GET** /trades | Get trade history
+[**account_active_orders**](OrderApi.md#account_active_orders) | **GET** /api/v1/accountActiveOrders | accountActiveOrders
+[**account_inactive_orders**](OrderApi.md#account_inactive_orders) | **GET** /api/v1/accountInactiveOrders | accountInactiveOrders
+[**exchange_stats**](OrderApi.md#exchange_stats) | **GET** /api/v1/exchangeStats | exchangeStats
+[**export**](OrderApi.md#export) | **GET** /api/v1/export | export
+[**order_book_details**](OrderApi.md#order_book_details) | **GET** /api/v1/orderBookDetails | orderBookDetails
+[**order_book_orders**](OrderApi.md#order_book_orders) | **GET** /api/v1/orderBookOrders | orderBookOrders
+[**order_books**](OrderApi.md#order_books) | **GET** /api/v1/orderBooks | orderBooks
+[**recent_trades**](OrderApi.md#recent_trades) | **GET** /api/v1/recentTrades | recentTrades
+[**trades**](OrderApi.md#trades) | **GET** /api/v1/trades | trades
 
-## create_order
 
-> Order create_order(symbol, side, order_type, quantity, price, stop_price, client_order_id, time_in_force, post_only, reduce_only)
 
-Create a new order
+## account_active_orders
 
-Places a new order on the exchange.
+> models::Orders account_active_orders(account_index, market_id, authorization, auth)
+accountActiveOrders
 
-### Example
-
-```rust
-use lighter_rust::{LighterClient, Config, Side, OrderType, TimeInForce};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new()
-        .with_api_key("your-api-key");
-    
-    let client = LighterClient::new(config, "your-private-key")?;
-    
-    // Place a limit buy order
-    let order = client.orders().create_order(
-        "BTC-USDC",
-        Side::Buy,
-        OrderType::Limit,
-        "0.1",           // quantity
-        Some("45000"),   // price
-        None,            // stop_price
-        None,            // client_order_id
-        Some(TimeInForce::Gtc),
-        Some(true),      // post_only
-        None,            // reduce_only
-    ).await?;
-    
-    println!("Order placed: {}", order.id);
-    println!("Status: {:?}", order.status);
-    
-    Ok(())
-}
-```
+Get account active orders. `auth` can be generated using the SDK.
 
 ### Parameters
 
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**symbol** | **String** | Trading pair symbol | [required] |
-**side** | [**Side**](Side.md) | Buy or Sell | [required] |
-**order_type** | [**OrderType**](OrderType.md) | Order type | [required] |
-**quantity** | **String** | Order quantity | [required] |
-**price** | **Option<String>** | Limit price (required for limit orders) | [optional] |
-**stop_price** | **Option<String>** | Trigger price for stop orders | [optional] |
-**client_order_id** | **Option<String>** | Client-provided order ID | [optional] |
-**time_in_force** | **Option<TimeInForce>** | Time in force | [optional] [default to GTC]
-**post_only** | **Option<bool>** | Post-only order | [optional] [default to false]
-**reduce_only** | **Option<bool>** | Reduce-only order | [optional] [default to false]
-
-### Return type
-
-[**Order**](Order.md)
-
-### Authorization
-
-[ApiKeyAuth](../README.md#ApiKeyAuth), [SignatureAuth](../README.md#SignatureAuth)
-
-### HTTP request headers
-
-- **Content-Type**: application/json
-- **Accept**: application/json
-
-## cancel_order
-
-> cancel_order(order_id, client_order_id, symbol)
-
-Cancel an order
-
-Cancels a specific order by ID or client order ID.
-
-### Example
-
-```rust
-use lighter_rust::{LighterClient, Config};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new()
-        .with_api_key("your-api-key");
-    
-    let client = LighterClient::new(config, "your-private-key")?;
-    
-    // Cancel by order ID
-    client.orders().cancel_order(
-        Some("order123"),
-        None,
-        None,
-    ).await?;
-    
-    println!("Order cancelled successfully");
-    
-    Ok(())
-}
-```
-
-### Parameters
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**order_id** | **Option<String>** | Order ID | [optional] |
-**client_order_id** | **Option<String>** | Client order ID | [optional] |
-**symbol** | **Option<String>** | Trading pair symbol | [optional] |
+**account_index** | **i64** |  | [required] |
+**market_id** | **i32** |  | [required] |
+**authorization** | Option<**String**> |  make required after integ is done |  |
+**auth** | Option<**String**> |  made optional to support header auth clients |  |
 
 ### Return type
 
-(empty response body)
+[**models::Orders**](Orders.md)
 
 ### Authorization
 
-[ApiKeyAuth](../README.md#ApiKeyAuth), [SignatureAuth](../README.md#SignatureAuth)
-
-### HTTP request headers
-
-- **Content-Type**: application/json
-- **Accept**: application/json
-
-## cancel_all_orders
-
-> u32 cancel_all_orders(symbol)
-
-Cancel all orders
-
-Cancels all open orders, optionally filtered by symbol.
-
-### Example
-
-```rust
-use lighter_rust::{LighterClient, Config};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new()
-        .with_api_key("your-api-key");
-    
-    let client = LighterClient::new(config, "your-private-key")?;
-    
-    // Cancel all BTC-USDC orders
-    let cancelled_count = client.orders()
-        .cancel_all_orders(Some("BTC-USDC"))
-        .await?;
-    
-    println!("Cancelled {} orders", cancelled_count);
-    
-    Ok(())
-}
-```
-
-### Parameters
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**symbol** | **Option<String>** | Filter by trading pair | [optional] |
-
-### Return type
-
-**u32**
-
-### Authorization
-
-[ApiKeyAuth](../README.md#ApiKeyAuth), [SignatureAuth](../README.md#SignatureAuth)
-
-### HTTP request headers
-
-- **Content-Type**: application/json
-- **Accept**: application/json
-
-## get_order
-
-> Order get_order(order_id)
-
-Get order by ID
-
-Retrieves details of a specific order.
-
-### Example
-
-```rust
-use lighter_rust::{LighterClient, Config};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new()
-        .with_api_key("your-api-key");
-    
-    let client = LighterClient::new(config, "your-private-key")?;
-    
-    let order = client.orders().get_order("order123").await?;
-    
-    println!("Order: {} - {:?}", order.id, order.status);
-    println!("Filled: {}/{}", order.filled_quantity, order.quantity);
-    
-    Ok(())
-}
-```
-
-### Parameters
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**order_id** | **String** | Order ID | [required] |
-
-### Return type
-
-[**Order**](Order.md)
-
-### Authorization
-
-[ApiKeyAuth](../README.md#ApiKeyAuth)
+No authorization required
 
 ### HTTP request headers
 
 - **Content-Type**: Not defined
 - **Accept**: application/json
 
-## get_orders
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
-> (Vec<Order>, Option<Pagination>) get_orders(filter)
 
-Get orders with filters
+## account_inactive_orders
 
-Retrieves orders with optional filtering.
+> models::Orders account_inactive_orders(account_index, limit, authorization, auth, market_id, ask_filter, between_timestamps, cursor)
+accountInactiveOrders
 
-### Example
-
-```rust
-use lighter_rust::{LighterClient, Config, OrderFilter, OrderStatus};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new()
-        .with_api_key("your-api-key");
-    
-    let client = LighterClient::new(config, "your-private-key")?;
-    
-    let filter = OrderFilter {
-        symbol: Some("BTC-USDC".to_string()),
-        status: Some(OrderStatus::Open),
-        side: None,
-        order_type: None,
-        start_time: None,
-        end_time: None,
-        page: Some(1),
-        limit: Some(50),
-    };
-    
-    let (orders, pagination) = client.orders()
-        .get_orders(Some(filter))
-        .await?;
-    
-    for order in orders {
-        println!("{}: {} {} @ {}", 
-            order.id,
-            order.symbol,
-            order.quantity,
-            order.price.unwrap_or("MARKET".to_string())
-        );
-    }
-    
-    if let Some(p) = pagination {
-        println!("Page {}/{}", p.page, p.total / p.limit as u64 + 1);
-    }
-    
-    Ok(())
-}
-```
+Get account inactive orders
 
 ### Parameters
 
+
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**filter** | **Option<OrderFilter>** | Filter parameters | [optional] |
+**account_index** | **i64** |  | [required] |
+**limit** | **i64** |  | [required] |
+**authorization** | Option<**String**> |  make required after integ is done |  |
+**auth** | Option<**String**> |  made optional to support header auth clients |  |
+**market_id** | Option<**i32**> |  |  |[default to 255]
+**ask_filter** | Option<**i32**> |  |  |[default to -1]
+**between_timestamps** | Option<**String**> |  |  |
+**cursor** | Option<**String**> |  |  |
 
 ### Return type
 
-(**Vec<Order>**, **Option<Pagination>**)
+[**models::Orders**](Orders.md)
 
 ### Authorization
 
-[ApiKeyAuth](../README.md#ApiKeyAuth)
+No authorization required
 
 ### HTTP request headers
 
 - **Content-Type**: Not defined
 - **Accept**: application/json
 
-## get_trades
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
-> Vec<Trade> get_trades(symbol)
 
-Get trade history
+## exchange_stats
 
-Returns executed trades for the account.
+> models::ExchangeStats exchange_stats()
+exchangeStats
 
-### Example
-
-```rust
-use lighter_rust::{LighterClient, Config};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new()
-        .with_api_key("your-api-key");
-    
-    let client = LighterClient::new(config, "your-private-key")?;
-    
-    // Get all BTC-USDC trades
-    let trades = client.orders()
-        .get_trades(Some("BTC-USDC"))
-        .await?;
-    
-    for trade in trades {
-        println!("Trade {}: {} {} @ {} - Fee: {} {}", 
-            trade.id,
-            trade.quantity,
-            trade.symbol,
-            trade.price,
-            trade.fee,
-            trade.fee_asset
-        );
-    }
-    
-    Ok(())
-}
-```
+Get exchange stats
 
 ### Parameters
 
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**symbol** | **Option<String>** | Filter by trading pair | [optional] |
+This endpoint does not need any parameter.
 
 ### Return type
 
-[**Vec<Trade>**](Trade.md)
+[**models::ExchangeStats**](ExchangeStats.md)
 
 ### Authorization
 
-[ApiKeyAuth](../README.md#ApiKeyAuth)
+No authorization required
 
 ### HTTP request headers
 
 - **Content-Type**: Not defined
 - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## export
+
+> models::ExportData export(r#type, authorization, auth, account_index, market_id)
+export
+
+Export data
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**r#type** | **String** |  | [required] |
+**authorization** | Option<**String**> |  |  |
+**auth** | Option<**String**> |  |  |
+**account_index** | Option<**i64**> |  |  |[default to -1]
+**market_id** | Option<**i32**> |  |  |[default to 255]
+
+### Return type
+
+[**models::ExportData**](ExportData.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## order_book_details
+
+> models::OrderBookDetails order_book_details(market_id)
+orderBookDetails
+
+Get order books metadata
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**market_id** | Option<**i32**> |  |  |[default to 255]
+
+### Return type
+
+[**models::OrderBookDetails**](OrderBookDetails.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## order_book_orders
+
+> models::OrderBookOrders order_book_orders(market_id, limit)
+orderBookOrders
+
+Get order book orders
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**market_id** | **i32** |  | [required] |
+**limit** | **i64** |  | [required] |
+
+### Return type
+
+[**models::OrderBookOrders**](OrderBookOrders.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## order_books
+
+> models::OrderBooks order_books(market_id)
+orderBooks
+
+Get order books metadata.<hr>**Response Description:**<br><br>1) **Taker and maker fees** are in percentage.<br>2) **Min base amount:** The amount of base token that can be traded in a single order.<br>3) **Min quote amount:** The amount of quote token that can be traded in a single order.<br>4) **Supported size decimals:** The number of decimal places that can be used for the size of the order.<br>5) **Supported price decimals:** The number of decimal places that can be used for the price of the order.<br>6) **Supported quote decimals:** Size Decimals + Quote Decimals.
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**market_id** | Option<**i32**> |  |  |[default to 255]
+
+### Return type
+
+[**models::OrderBooks**](OrderBooks.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## recent_trades
+
+> models::Trades recent_trades(market_id, limit)
+recentTrades
+
+Get recent trades
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**market_id** | **i32** |  | [required] |
+**limit** | **i64** |  | [required] |
+
+### Return type
+
+[**models::Trades**](Trades.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## trades
+
+> models::Trades trades(sort_by, limit, authorization, auth, market_id, account_index, order_index, sort_dir, cursor, from, ask_filter)
+trades
+
+Get trades
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**sort_by** | **String** |  | [required] |
+**limit** | **i64** |  | [required] |
+**authorization** | Option<**String**> |  |  |
+**auth** | Option<**String**> |  |  |
+**market_id** | Option<**i32**> |  |  |[default to 255]
+**account_index** | Option<**i64**> |  |  |[default to -1]
+**order_index** | Option<**i64**> |  |  |
+**sort_dir** | Option<**String**> |  |  |[default to desc]
+**cursor** | Option<**String**> |  |  |
+**from** | Option<**i64**> |  |  |[default to -1]
+**ask_filter** | Option<**i32**> |  |  |[default to -1]
+
+### Return type
+
+[**models::Trades**](Trades.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+

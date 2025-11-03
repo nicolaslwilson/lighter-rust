@@ -1,260 +1,421 @@
-# AccountApi
+# \AccountApi
 
-All URIs are relative to *https://api.lighter.xyz*
+All URIs are relative to *https://mainnet.zklighter.elliot.ai*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**get_account**](AccountApi.md#get_account) | **GET** /account | Get account information
-[**get_account_stats**](AccountApi.md#get_account_stats) | **GET** /account/stats | Get account statistics
-[**change_account_tier**](AccountApi.md#change_account_tier) | **POST** /account/change-tier | Change account tier
-[**get_balances**](AccountApi.md#get_balances) | **GET** /account/balances | Get account balances
-[**get_positions**](AccountApi.md#get_positions) | **GET** /account/positions | Get open positions
+[**account**](AccountApi.md#account) | **GET** /api/v1/account | account
+[**account_limits**](AccountApi.md#account_limits) | **GET** /api/v1/accountLimits | accountLimits
+[**account_metadata**](AccountApi.md#account_metadata) | **GET** /api/v1/accountMetadata | accountMetadata
+[**accounts_by_l1_address**](AccountApi.md#accounts_by_l1_address) | **GET** /api/v1/accountsByL1Address | accountsByL1Address
+[**apikeys**](AccountApi.md#apikeys) | **GET** /api/v1/apikeys | apikeys
+[**change_account_tier**](AccountApi.md#change_account_tier) | **POST** /api/v1/changeAccountTier | changeAccountTier
+[**l1_metadata**](AccountApi.md#l1_metadata) | **GET** /api/v1/l1Metadata | l1Metadata
+[**liquidations**](AccountApi.md#liquidations) | **GET** /api/v1/liquidations | liquidations
+[**pnl**](AccountApi.md#pnl) | **GET** /api/v1/pnl | pnl
+[**position_funding**](AccountApi.md#position_funding) | **GET** /api/v1/positionFunding | positionFunding
+[**public_pools**](AccountApi.md#public_pools) | **GET** /api/v1/publicPools | publicPools
+[**public_pools_metadata**](AccountApi.md#public_pools_metadata) | **GET** /api/v1/publicPoolsMetadata | publicPoolsMetadata
 
-## get_account
 
-> Account get_account()
 
-Get account information
+## account
 
-Retrieves the current account information including tier, balances, and positions.
+> models::DetailedAccounts account(by, value)
+account
 
-### Example
-
-```rust
-use lighter_rust::{LighterClient, Config};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new()
-        .with_api_key("your-api-key");
-    
-    let client = LighterClient::new(config, "your-private-key")?;
-    
-    let account = client.account().get_account().await?;
-    println!("Account ID: {}", account.id);
-    println!("Account Tier: {:?}", account.tier);
-    
-    Ok(())
-}
-```
+Get account by account's index. <br>More details about account index: [Account Index](https://apidocs.lighter.xyz/docs/account-index)<hr>**Response Description:**<br><br>1) **Status:** 1 is active 0 is inactive.<br>2) **Collateral:** The amount of collateral in the account.<hr>**Position Details Description:**<br>1) **OOC:** Open order count in that market.<br>2) **Sign:** 1 for Long, -1 for Short.<br>3) **Position:** The amount of position in that market.<br>4) **Avg Entry Price:** The average entry price of the position.<br>5) **Position Value:** The value of the position.<br>6) **Unrealized PnL:** The unrealized profit and loss of the position.<br>7) **Realized PnL:** The realized profit and loss of the position.
 
 ### Parameters
 
-This endpoint does not need any parameter.
-
-### Return type
-
-[**Account**](Account.md)
-
-### Authorization
-
-[ApiKeyAuth](../README.md#ApiKeyAuth)
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json
-
-## get_account_stats
-
-> AccountStats get_account_stats()
-
-Get account statistics
-
-Returns trading statistics for the account including volume, fees, and performance metrics.
-
-### Example
-
-```rust
-use lighter_rust::{LighterClient, Config};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new()
-        .with_api_key("your-api-key");
-    
-    let client = LighterClient::new(config, "your-private-key")?;
-    
-    let stats = client.account().get_account_stats().await?;
-    println!("Total Volume: {}", stats.total_volume);
-    println!("Total Trades: {}", stats.total_trades);
-    println!("Win Rate: {}%", stats.win_rate);
-    
-    Ok(())
-}
-```
-
-### Parameters
-
-This endpoint does not need any parameter.
-
-### Return type
-
-[**AccountStats**](AccountStats.md)
-
-### Authorization
-
-[ApiKeyAuth](../README.md#ApiKeyAuth)
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json
-
-## change_account_tier
-
-> change_account_tier(target_tier)
-
-Change account tier
-
-Switch between Standard and Premium account tiers. Requirements:
-- No open positions
-- No open orders
-- Minimum 3-hour gap between switches
-
-### Example
-
-```rust
-use lighter_rust::{LighterClient, Config, AccountTier};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new()
-        .with_api_key("your-api-key");
-    
-    let client = LighterClient::new(config, "your-private-key")?;
-    
-    // Check if tier switch is allowed
-    if client.account().can_switch_tier().await? {
-        // Switch to Premium tier
-        client.account().change_account_tier(AccountTier::Premium).await?;
-        println!("Successfully switched to Premium tier");
-    } else {
-        println!("Cannot switch tier at this time");
-    }
-    
-    Ok(())
-}
-```
-
-### Parameters
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**target_tier** | [**AccountTier**](AccountTier.md) | Target account tier | [required] |
+**by** | **String** |  | [required] |
+**value** | **String** |  | [required] |
 
 ### Return type
 
-(empty response body)
+[**models::DetailedAccounts**](DetailedAccounts.md)
 
 ### Authorization
 
-[ApiKeyAuth](../README.md#ApiKeyAuth), [SignatureAuth](../README.md#SignatureAuth)
-
-### HTTP request headers
-
-- **Content-Type**: application/json
-- **Accept**: application/json
-
-## get_balances
-
-> Vec<Balance> get_balances()
-
-Get account balances
-
-Returns all asset balances for the account.
-
-### Example
-
-```rust
-use lighter_rust::{LighterClient, Config};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new()
-        .with_api_key("your-api-key");
-    
-    let client = LighterClient::new(config, "your-private-key")?;
-    
-    let balances = client.account().get_balances().await?;
-    
-    for balance in balances {
-        println!("{}: {} (Available: {})", 
-            balance.asset, 
-            balance.total, 
-            balance.available
-        );
-    }
-    
-    Ok(())
-}
-```
-
-### Parameters
-
-This endpoint does not need any parameter.
-
-### Return type
-
-[**Vec<Balance>**](Balance.md)
-
-### Authorization
-
-[ApiKeyAuth](../README.md#ApiKeyAuth)
+No authorization required
 
 ### HTTP request headers
 
 - **Content-Type**: Not defined
 - **Accept**: application/json
 
-## get_positions
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
-> Vec<Position> get_positions()
 
-Get open positions
+## account_limits
 
-Returns all open positions for the account.
+> models::AccountLimits account_limits(account_index, authorization, auth)
+accountLimits
 
-### Example
-
-```rust
-use lighter_rust::{LighterClient, Config};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new()
-        .with_api_key("your-api-key");
-    
-    let client = LighterClient::new(config, "your-private-key")?;
-    
-    let positions = client.account().get_positions().await?;
-    
-    for position in positions {
-        println!("{} {} @ {} - PnL: {}", 
-            position.symbol,
-            position.size,
-            position.entry_price,
-            position.unrealized_pnl
-        );
-    }
-    
-    Ok(())
-}
-```
+Get account limits
 
 ### Parameters
 
-This endpoint does not need any parameter.
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**account_index** | **i64** |  | [required] |
+**authorization** | Option<**String**> |  make required after integ is done |  |
+**auth** | Option<**String**> |  made optional to support header auth clients |  |
 
 ### Return type
 
-[**Vec<Position>**](Position.md)
+[**models::AccountLimits**](AccountLimits.md)
 
 ### Authorization
 
-[ApiKeyAuth](../README.md#ApiKeyAuth)
+No authorization required
 
 ### HTTP request headers
 
 - **Content-Type**: Not defined
 - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## account_metadata
+
+> models::AccountMetadatas account_metadata(by, value, authorization, auth)
+accountMetadata
+
+Get account metadatas
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**by** | **String** |  | [required] |
+**value** | **String** |  | [required] |
+**authorization** | Option<**String**> |  |  |
+**auth** | Option<**String**> |  |  |
+
+### Return type
+
+[**models::AccountMetadatas**](AccountMetadatas.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## accounts_by_l1_address
+
+> models::SubAccounts accounts_by_l1_address(l1_address)
+accountsByL1Address
+
+Get accounts by l1_address returns all accounts associated with the given L1 address
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**l1_address** | **String** |  | [required] |
+
+### Return type
+
+[**models::SubAccounts**](SubAccounts.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## apikeys
+
+> models::AccountApiKeys apikeys(account_index, api_key_index)
+apikeys
+
+Get account api key. Set `api_key_index` to 255 to retrieve all api keys associated with the account.
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**account_index** | **i64** |  | [required] |
+**api_key_index** | Option<**i32**> |  |  |[default to 255]
+
+### Return type
+
+[**models::AccountApiKeys**](AccountApiKeys.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## change_account_tier
+
+> models::RespChangeAccountTier change_account_tier(account_index, new_tier, authorization, auth)
+changeAccountTier
+
+Change account tier
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**account_index** | **i64** |  | [required] |
+**new_tier** | **String** |  | [required] |
+**authorization** | Option<**String**> |  make required after integ is done |  |
+**auth** | Option<**String**> |  made optional to support header auth clients |  |
+
+### Return type
+
+[**models::RespChangeAccountTier**](RespChangeAccountTier.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: multipart/form-data
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## l1_metadata
+
+> models::L1Metadata l1_metadata(l1_address, authorization, auth)
+l1Metadata
+
+Get L1 metadata
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**l1_address** | **String** |  | [required] |
+**authorization** | Option<**String**> |  make required after integ is done |  |
+**auth** | Option<**String**> |  made optional to support header auth clients |  |
+
+### Return type
+
+[**models::L1Metadata**](L1Metadata.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## liquidations
+
+> models::LiquidationInfos liquidations(account_index, limit, authorization, auth, market_id, cursor)
+liquidations
+
+Get liquidation infos
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**account_index** | **i64** |  | [required] |
+**limit** | **i64** |  | [required] |
+**authorization** | Option<**String**> |  make required after integ is done |  |
+**auth** | Option<**String**> |  made optional to support header auth clients |  |
+**market_id** | Option<**i32**> |  |  |[default to 255]
+**cursor** | Option<**String**> |  |  |
+
+### Return type
+
+[**models::LiquidationInfos**](LiquidationInfos.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## pnl
+
+> models::AccountPnL pnl(by, value, resolution, start_timestamp, end_timestamp, count_back, authorization, auth, ignore_transfers)
+pnl
+
+Get account PnL chart
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**by** | **String** |  | [required] |
+**value** | **String** |  | [required] |
+**resolution** | **String** |  | [required] |
+**start_timestamp** | **i64** |  | [required] |
+**end_timestamp** | **i64** |  | [required] |
+**count_back** | **i64** |  | [required] |
+**authorization** | Option<**String**> |  |  |
+**auth** | Option<**String**> |  |  |
+**ignore_transfers** | Option<**bool**> |  |  |[default to false]
+
+### Return type
+
+[**models::AccountPnL**](AccountPnL.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## position_funding
+
+> models::PositionFundings position_funding(account_index, limit, authorization, auth, market_id, cursor, side)
+positionFunding
+
+Get accounts position fundings
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**account_index** | **i64** |  | [required] |
+**limit** | **i64** |  | [required] |
+**authorization** | Option<**String**> |  |  |
+**auth** | Option<**String**> |  |  |
+**market_id** | Option<**i32**> |  |  |[default to 255]
+**cursor** | Option<**String**> |  |  |
+**side** | Option<**String**> |  |  |[default to all]
+
+### Return type
+
+[**models::PositionFundings**](PositionFundings.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## public_pools
+
+> models::PublicPools public_pools(index, limit, authorization, auth, filter, account_index)
+publicPools
+
+Get public pools
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**index** | **i64** |  | [required] |
+**limit** | **i64** |  | [required] |
+**authorization** | Option<**String**> |  |  |
+**auth** | Option<**String**> |  |  |
+**filter** | Option<**String**> |  |  |
+**account_index** | Option<**i64**> |  |  |
+
+### Return type
+
+[**models::PublicPools**](PublicPools.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## public_pools_metadata
+
+> models::RespPublicPoolsMetadata public_pools_metadata(index, limit, authorization, auth, filter, account_index)
+publicPoolsMetadata
+
+Get public pools metadata
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**index** | **i64** |  | [required] |
+**limit** | **i64** |  | [required] |
+**authorization** | Option<**String**> |  |  |
+**auth** | Option<**String**> |  |  |
+**filter** | Option<**String**> |  |  |
+**account_index** | Option<**i64**> |  |  |
+
+### Return type
+
+[**models::RespPublicPoolsMetadata**](RespPublicPoolsMetadata.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
