@@ -46,6 +46,7 @@ pub mod log;
 pub mod models; // openapi generated, needed for requests/responses
 pub mod signer; // module containing the interface to the `lighter-go` lib, used for signing
 pub use config::LighterConfig;
+pub use config::RetryConfig;
 mod error;
 pub use error::{LighterError, Result};
 
