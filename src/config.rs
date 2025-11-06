@@ -5,7 +5,7 @@ use crate::{
     error::{LighterError, Result},
 };
 use reqwest::Client;
-use reqwest_middleware::ClientBuilder;
+use reqwest_middleware::{ClientBuilder, Middleware, Next};
 use reqwest_retry::{
     policies::ExponentialBackoff, Jitter, RetryTransientMiddleware, Retryable, RetryableStrategy,
 };
@@ -35,6 +35,44 @@ impl RetryableStrategy for TooManyRequestsStrategy {
             Ok(success) if success.status().is_server_error() => Some(Retryable::Transient),
             Ok(_) => None, // do not retry in this case,
             Err(error) => reqwest_retry::default_on_request_failure(error),
+        }
+    }
+}
+
+/// A middleware wrapper that handles non-cloneable requests gracefully.
+/// If a request cannot be cloned (e.g., multipart forms), it skips the retry middleware
+/// and executes the request directly.
+struct CloneableRequestWrapper<M> {
+    inner: M,
+}
+
+impl<M> CloneableRequestWrapper<M> {
+    fn new(inner: M) -> Self {
+        Self { inner }
+    }
+}
+
+// Note: async-trait is available as a transitive dependency via reqwest-middleware
+#[async_trait::async_trait]
+impl<M> Middleware for CloneableRequestWrapper<M>
+where
+    M: Middleware,
+{
+    async fn handle(
+        &self,
+        req: reqwest::Request,
+        extensions: &mut http::Extensions,
+        next: Next<'_>,
+    ) -> reqwest_middleware::Result<reqwest::Response> {
+        // Check if the request can be cloned. If not, skip the retry middleware
+        // and execute directly to avoid the "Request object is not cloneable" error.
+        if req.try_clone().is_none() {
+            // Request is not cloneable (e.g., has multipart body), execute directly without retry
+            tracing::debug!("Skipping retry middleware for non-cloneable request");
+            next.run(req, extensions).await
+        } else {
+            // Request is cloneable, use the inner middleware (retry)
+            self.inner.handle(req, extensions, next).await
         }
     }
 }
@@ -233,11 +271,14 @@ impl TryFrom<&LighterConfig> for Configuration {
                 .jitter(Jitter::Bounded)
                 .build_with_max_retries(retry_config.max_retries);
 
-            middleware_builder =
-                middleware_builder.with(RetryTransientMiddleware::new_with_policy_and_strategy(
-                    exp_backoff,
-                    TooManyRequestsStrategy,
-                ));
+            let retry_middleware = RetryTransientMiddleware::new_with_policy_and_strategy(
+                exp_backoff,
+                TooManyRequestsStrategy,
+            );
+
+            // Wrap the retry middleware to handle non-cloneable requests (e.g., multipart)
+            let wrapped_retry = CloneableRequestWrapper::new(retry_middleware);
+            middleware_builder = middleware_builder.with(wrapped_retry);
         }
 
         let openapi_config = Configuration {

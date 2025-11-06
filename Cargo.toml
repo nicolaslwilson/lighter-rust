@@ -58,6 +58,8 @@ reqwest-middleware = { version = "0.4.2", features = ["multipart"] }
 reqwest-retry = "0.7.0"
 strum = { version = "0.27.2", features = ["strum_macros"] }
 secrecy = "0.10.3"
+http = { version = "1.3", default-features = false }
+async-trait = "0.1.89"
 
 [dev-dependencies]
 tokio-test = "0.4"
