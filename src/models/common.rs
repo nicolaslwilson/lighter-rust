@@ -27,26 +27,6 @@ impl Side {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum OrderType {
-    Market,
-    Limit,
-    StopLoss,
-    TakeProfit,
-}
-
-impl OrderType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Market => "MARKET",
-            Self::Limit => "LIMIT",
-            Self::StopLoss => "STOP_LOSS",
-            Self::TakeProfit => "TAKE_PROFIT",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum OrderStatus {
     Pending,
     Open,
@@ -106,14 +86,6 @@ mod tests {
     fn side_as_str_matches_api_format() {
         assert_eq!(Side::Buy.as_str(), "BUY");
         assert_eq!(Side::Sell.as_str(), "SELL");
-    }
-
-    #[test]
-    fn order_type_as_str_matches_api_format() {
-        assert_eq!(OrderType::Market.as_str(), "MARKET");
-        assert_eq!(OrderType::Limit.as_str(), "LIMIT");
-        assert_eq!(OrderType::StopLoss.as_str(), "STOP_LOSS");
-        assert_eq!(OrderType::TakeProfit.as_str(), "TAKE_PROFIT");
     }
 
     #[test]
