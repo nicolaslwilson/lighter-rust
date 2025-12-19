@@ -67,7 +67,9 @@ pub struct SignCancelOrderData {
 
 #[derive(Debug)]
 pub struct SignWithdrawData {
-    pub usdc_amount: i64,
+    pub asset_index: i32,
+    pub route_type: i32,
+    pub amount: u64,
 }
 
 #[derive(Debug)]
@@ -88,7 +90,10 @@ pub struct SignModifyOrderData {
 #[derive(Debug)]
 pub struct SignTransferData {
     pub to_account_index: i64,
-    pub usdc_amount: i64,
+    pub asset_index: i16,
+    pub from_route_type: u8,
+    pub to_route_type: u8,
+    pub amount: i64,
     pub fee: i64,
     pub memo: [u8; 32],
 }

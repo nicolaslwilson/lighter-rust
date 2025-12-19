@@ -64,7 +64,14 @@ impl FFISigner {
             TxData::ChangePubKey(data) => {
                 let c_pubkey = CString::new(data.new_pubk.as_str())
                     .map_err(|_| LighterError::Signing("Invalid key".to_string()))?;
-                unsafe { ffisigner::SignChangePubKey(c_pubkey.as_ptr() as *mut i8, nonce) }
+                unsafe {
+                    ffisigner::SignChangePubKey(
+                        c_pubkey.as_ptr() as *mut i8,
+                        nonce,
+                        self.api_key_index as c_int,
+                        self.account_index as c_longlong,
+                    )
+                }
             }
             TxData::CreateOrder(data) => unsafe {
                 ffisigner::SignCreateOrder(
@@ -79,6 +86,8 @@ impl FFISigner {
                     data.trigger_price,
                     data.order_expiry as c_longlong,
                     nonce,
+                    self.api_key_index as c_int,
+                    self.account_index as c_longlong,
                 )
             },
             TxData::SignCreateGroupedOrders(mut data) => {
@@ -90,18 +99,45 @@ impl FFISigner {
                         orders_ptr,
                         orders_len as i32,
                         nonce,
+                        self.api_key_index as c_int,
+                        self.account_index as c_longlong,
                     )
                 }
             }
             TxData::SignCancelOrder(data) => unsafe {
-                ffisigner::SignCancelOrder(data.market_index, data.order_index, nonce)
+                ffisigner::SignCancelOrder(
+                    data.market_index,
+                    data.order_index,
+                    nonce,
+                    self.api_key_index as c_int,
+                    self.account_index as c_longlong,
+                )
             },
             TxData::SignWithdraw(data) => unsafe {
-                ffisigner::SignWithdraw(data.usdc_amount, nonce)
+                ffisigner::SignWithdraw(
+                    data.asset_index,
+                    data.route_type,
+                    data.amount,
+                    nonce,
+                    self.api_key_index as c_int,
+                    self.account_index as c_longlong,
+                )
             },
-            TxData::SignCreateSubaccount => unsafe { ffisigner::SignCreateSubAccount(nonce) },
+            TxData::SignCreateSubaccount => unsafe {
+                ffisigner::SignCreateSubAccount(
+                    nonce,
+                    self.api_key_index as c_int,
+                    self.account_index as c_longlong,
+                )
+            },
             TxData::SignCancelAllOrders(data) => unsafe {
-                ffisigner::SignCancelAllOrders(data.time_in_force as c_int, data.time, nonce)
+                ffisigner::SignCancelAllOrders(
+                    data.time_in_force as c_int,
+                    data.time,
+                    nonce,
+                    self.api_key_index as c_int,
+                    self.account_index as c_longlong,
+                )
             },
             TxData::SignModifyOrder(data) => unsafe {
                 ffisigner::SignModifyOrder(
@@ -111,6 +147,8 @@ impl FFISigner {
                     data.price,
                     data.trigger_price,
                     nonce,
+                    self.api_key_index as c_int,
+                    self.account_index as c_longlong,
                 )
             },
             TxData::SignTransfer(data) => unsafe {
@@ -120,18 +158,25 @@ impl FFISigner {
                     .map_err(|_| LighterError::Signing("Invalid memo".to_string()))?;
                 ffisigner::SignTransfer(
                     data.to_account_index,
-                    data.usdc_amount,
+                    data.asset_index,
+                    data.from_route_type,
+                    data.to_route_type,
+                    data.amount,
                     data.fee,
                     memo.as_ptr() as *mut i8,
                     nonce,
+                    self.api_key_index as c_int,
+                    self.account_index as c_longlong,
                 )
             },
             TxData::SignCreatePublicPool(data) => unsafe {
                 ffisigner::SignCreatePublicPool(
                     data.operator_fee,
-                    data.initial_total_shares,
+                    data.initial_total_shares as i32,
                     data.min_operator_share_rate,
                     nonce,
+                    self.api_key_index as c_int,
+                    self.account_index as c_longlong,
                 )
             },
             TxData::SignUpdatePublicPool(data) => unsafe {
@@ -139,15 +184,29 @@ impl FFISigner {
                     data.public_pool_index,
                     data.status,
                     data.operator_fee,
-                    data.min_operator_share_rate,
+                    data.min_operator_share_rate as i32,
                     nonce,
+                    self.api_key_index as c_int,
+                    self.account_index as c_longlong,
                 )
             },
             TxData::SignMintShares(data) => unsafe {
-                ffisigner::SignMintShares(data.public_pool_index, data.share_amount, nonce)
+                ffisigner::SignMintShares(
+                    data.public_pool_index,
+                    data.share_amount,
+                    nonce,
+                    self.api_key_index as c_int,
+                    self.account_index as c_longlong,
+                )
             },
             TxData::SignBurnShares(data) => unsafe {
-                ffisigner::SignBurnShares(data.public_pool_index, data.share_amount, nonce)
+                ffisigner::SignBurnShares(
+                    data.public_pool_index,
+                    data.share_amount,
+                    nonce,
+                    self.api_key_index as c_int,
+                    self.account_index as c_longlong,
+                )
             },
             TxData::SignUpdateLeverage(data) => unsafe {
                 ffisigner::SignUpdateLeverage(
@@ -155,6 +214,8 @@ impl FFISigner {
                     data.initial_margin_fraction,
                     data.margin_mode,
                     nonce,
+                    self.api_key_index as c_int,
+                    self.account_index as c_longlong,
                 )
             },
             TxData::SignUpdateMargin(data) => unsafe {
@@ -163,11 +224,13 @@ impl FFISigner {
                     data.usdc_amount,
                     data.direction,
                     nonce,
+                    self.api_key_index as c_int,
+                    self.account_index as c_longlong,
                 )
             },
         };
 
-        self.parse_result(res)
+        self.parse_signed_tx_result(res)
     }
 
     pub fn get_auth_token(&self, expiration_timestamp: Option<i64>) -> Result<String> {
@@ -200,7 +263,11 @@ impl FFISigner {
             let deadline =
                 deadline.unwrap_or((chrono::Utc::now() + Duration::minutes(10)).timestamp());
 
-            let result = ffisigner::CreateAuthToken(deadline);
+            let result = ffisigner::CreateAuthToken(
+                deadline,
+                self.api_key_index as c_int,
+                self.account_index as c_longlong,
+            );
             let token = self.parse_result(result)?;
 
             Ok(AuthToken {
@@ -252,6 +319,40 @@ impl FFISigner {
 
             let value_str = CStr::from_ptr(result.str_).to_string_lossy().to_string();
             libc::free(result.str_ as *mut libc::c_void);
+
+            Ok(value_str)
+        }
+    }
+
+    fn parse_signed_tx_result(&self, result: ffisigner::SignedTxResponse) -> Result<String> {
+        unsafe {
+            if !result.err.is_null() {
+                let error_str = CStr::from_ptr(result.err).to_string_lossy().to_string();
+                libc::free(result.err as *mut libc::c_void);
+                if !result.txInfo.is_null() {
+                    libc::free(result.txInfo as *mut libc::c_void);
+                }
+                if !result.txHash.is_null() {
+                    libc::free(result.txHash as *mut libc::c_void);
+                }
+                if !result.messageToSign.is_null() {
+                    libc::free(result.messageToSign as *mut libc::c_void);
+                }
+                return Err(LighterError::Signing(error_str));
+            }
+
+            if result.txInfo.is_null() {
+                return Err(LighterError::Signing("Null result".to_string()));
+            }
+
+            let value_str = CStr::from_ptr(result.txInfo).to_string_lossy().to_string();
+            libc::free(result.txInfo as *mut libc::c_void);
+            if !result.txHash.is_null() {
+                libc::free(result.txHash as *mut libc::c_void);
+            }
+            if !result.messageToSign.is_null() {
+                libc::free(result.messageToSign as *mut libc::c_void);
+            }
 
             Ok(value_str)
         }

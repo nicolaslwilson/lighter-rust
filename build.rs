@@ -1,7 +1,7 @@
 use std::{env, fs, path::PathBuf};
 
 // We will build the `lighter-signer` bindings here
-// instead of mapping them manually, since we have the header files from v0.1.3
+// instead of mapping them manually, since we have the header files from v1.0.2
 fn main() {
     let dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
