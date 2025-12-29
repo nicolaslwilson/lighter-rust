@@ -335,23 +335,23 @@ impl FFISigner {
             let collect_unique_pointers = || -> Vec<*mut libc::c_void> {
                 let mut pointers = Vec::new();
 
-                if !result.err.is_null() {
+                if !result.err.is_null() && (result.err as usize) > 0x1000 {
                     let err_ptr = result.err as *mut libc::c_void;
                     pointers.push(err_ptr);
                 }
-                if !result.txInfo.is_null() {
+                if !result.txInfo.is_null() && (result.txInfo as usize) > 0x1000 {
                     let tx_info_ptr = result.txInfo as *mut libc::c_void;
                     if !pointers.contains(&tx_info_ptr) {
                         pointers.push(tx_info_ptr);
                     }
                 }
-                if !result.txHash.is_null() {
+                if !result.txHash.is_null() && (result.txHash as usize) > 0x1000 {
                     let tx_hash_ptr = result.txHash as *mut libc::c_void;
                     if !pointers.contains(&tx_hash_ptr) {
                         pointers.push(tx_hash_ptr);
                     }
                 }
-                if !result.messageToSign.is_null() {
+                if !result.messageToSign.is_null() && (result.messageToSign as usize) > 0x1000 {
                     let msg_ptr = result.messageToSign as *mut libc::c_void;
                     if !pointers.contains(&msg_ptr) {
                         pointers.push(msg_ptr);
@@ -383,13 +383,13 @@ impl FFISigner {
                 return Err(LighterError::Signing(error_str));
             }
 
-            let tx_info_str = if result.txInfo.is_null() {
+            let tx_info_str = if result.txInfo.is_null() || (result.txInfo as usize) <= 0x1000 {
                 String::new()
             } else {
                 CStr::from_ptr(result.txInfo).to_string_lossy().to_string()
             };
             println!("tx_info_str: {:?}", tx_info_str);
-            let tx_hash_str = if result.txHash.is_null() {
+            let tx_hash_str = if result.txHash.is_null() || (result.txHash as usize) <= 0x1000 {
                 String::new()
             } else {
                 CStr::from_ptr(result.txHash).to_string_lossy().to_string()
