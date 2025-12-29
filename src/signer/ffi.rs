@@ -6,6 +6,51 @@ use crate::signer::data::TxData;
 use std::ffi::{c_int, c_longlong, CStr, CString};
 use std::sync::{Arc, RwLock};
 
+// Go string structure as defined in cgo
+// typedef struct { const char *p; ptrdiff_t n; } _GoString_;
+#[repr(C)]
+struct GoString {
+    p: *const i8,
+    n: isize,
+}
+
+// Helper function to read a string from a pointer that might be:
+// 1. A Go string structure (GoString with p and n fields)
+// 2. A C string (null-terminated)
+// Returns empty string if pointer is null or invalid
+unsafe fn read_go_or_c_string(ptr: *mut i8) -> String {
+    if ptr.is_null() || (ptr as usize) <= 0x1000 {
+        return String::new();
+    }
+
+    // Try reading as Go string structure first
+    let go_str_ptr = ptr as *const GoString;
+    let go_str = &*go_str_ptr;
+
+    // Check if this looks like a Go string structure:
+    // - n should be reasonable (positive and not too large, e.g., < 1MB)
+    // - p should be a valid pointer
+    if go_str.n > 0 && go_str.n < 1_000_000 && !go_str.p.is_null() && (go_str.p as usize) > 0x1000 {
+        // This looks like a Go string structure
+        // Cast from *const i8 to *const u8 (safe since both are 8-bit)
+        let u8_ptr = go_str.p as *const u8;
+        let slice = std::slice::from_raw_parts(u8_ptr, go_str.n as usize);
+        match std::str::from_utf8(slice) {
+            Ok(s) => return s.to_string(),
+            Err(_) => {
+                // If UTF-8 conversion fails, try as C string instead
+                // (fall through to C string reading below)
+            }
+        }
+    }
+
+    // Fall back to reading as C string (null-terminated)
+    match CStr::from_ptr(ptr).to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => CStr::from_ptr(ptr).to_string_lossy().to_string(),
+    }
+}
+
 pub mod ffisigner {
     #![allow(warnings)]
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
@@ -331,37 +376,6 @@ impl FFISigner {
 
     fn parse_signed_tx_result(&self, result: ffisigner::SignedTxResponse) -> Result<[String; 3]> {
         unsafe {
-            // Helper to collect unique pointers to avoid double free
-            let collect_unique_pointers = || -> Vec<*mut libc::c_void> {
-                let mut pointers = Vec::new();
-
-                if !result.err.is_null() && (result.err as usize) > 0x1000 {
-                    let err_ptr = result.err as *mut libc::c_void;
-                    pointers.push(err_ptr);
-                }
-                // if !result.txInfo.is_null() && (result.txInfo as usize) > 0x1000 {
-                //     let tx_info_ptr = result.txInfo as *mut libc::c_void;
-                //     if !pointers.contains(&tx_info_ptr) {
-                //         pointers.push(tx_info_ptr);
-                //     }
-                // }
-                if !result.txHash.is_null() && (result.txHash as usize) > 0x1000 {
-                    let tx_hash_ptr = result.txHash as *mut libc::c_void;
-                    if !pointers.contains(&tx_hash_ptr) {
-                        pointers.push(tx_hash_ptr);
-                    }
-                }
-                if !result.messageToSign.is_null() && (result.messageToSign as usize) > 0x1000 {
-                    let msg_ptr = result.messageToSign as *mut libc::c_void;
-                    if !pointers.contains(&msg_ptr) {
-                        pointers.push(msg_ptr);
-                    }
-                }
-
-                println!("pointers: {:?}", pointers);
-                pointers
-            };
-
             println!("result.err: {:?}", result.err);
             println!("result.txInfo: {:?}", result.txInfo);
             println!("result.txHash: {:?}", result.txHash);
@@ -371,48 +385,24 @@ impl FFISigner {
 
             if has_error {
                 println!("result.err is not null");
-                let error_str = CStr::from_ptr(result.err).to_string_lossy().to_string();
-
+                let error_str = read_go_or_c_string(result.err);
                 println!("error_str: {:?}", error_str);
-                // Collect all unique pointers and free them once
-                let pointers_to_free = collect_unique_pointers();
-                for ptr in pointers_to_free {
-                    libc::free(ptr);
-                }
 
+                // Note: We don't free Go-allocated memory - Go's GC handles it
                 return Err(LighterError::Signing(error_str));
             }
 
-            let tx_info_str = if result.txInfo.is_null() || (result.txInfo as usize) <= 0x1000 {
-                println!("result.txInfo is null");
-                String::new()
-            } else {
-                CStr::from_ptr(result.txInfo).to_string_lossy().to_string()
-            };
+            // Read strings - they might be Go string structures or C strings
+            let tx_info_str = read_go_or_c_string(result.txInfo);
             println!("tx_info_str: {:?}", tx_info_str);
-            let tx_hash_str = if result.txHash.is_null() || (result.txHash as usize) <= 0x1000 {
-                println!("result.txHash is null");
-                String::new()
-            } else {
-                CStr::from_ptr(result.txHash).to_string_lossy().to_string()
-            };
+
+            let tx_hash_str = read_go_or_c_string(result.txHash);
             println!("tx_hash_str: {:?}", tx_hash_str);
-            let message_to_sign_str =
-                if result.messageToSign.is_null() || (result.messageToSign as usize) <= 0x1000 {
-                    println!("result.messageToSign is null");
-                    String::new()
-                } else {
-                    CStr::from_ptr(result.messageToSign)
-                        .to_string_lossy()
-                        .to_string()
-                };
+
+            let message_to_sign_str = read_go_or_c_string(result.messageToSign);
             println!("message_to_sign_str: {:?}", message_to_sign_str);
-            // Collect all unique pointers and free them once
-            let pointers_to_free = collect_unique_pointers();
-            println!("pointers_to_free: {:?}", pointers_to_free);
-            for ptr in pointers_to_free {
-                libc::free(ptr);
-            }
+
+            // Note: We don't free Go-allocated memory - Go's GC handles it automatically
 
             Ok([result.txType.to_string(), tx_info_str, tx_hash_str])
         }
