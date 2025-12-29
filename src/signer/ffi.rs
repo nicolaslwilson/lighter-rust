@@ -27,24 +27,47 @@ unsafe fn read_go_or_c_string(ptr: *mut i8) -> String {
     let go_str_ptr = ptr as *const GoString;
     let go_str = &*go_str_ptr;
 
+    // Debug: print what we're reading
+    println!(
+        "ptr: {:?}, go_str.p: {:?}, go_str.n: {}",
+        ptr, go_str.p, go_str.n
+    );
+
     // Check if this looks like a Go string structure:
     // - n should be reasonable (positive and not too large, e.g., < 1MB)
     // - p should be a valid pointer
     if go_str.n > 0 && go_str.n < 1_000_000 && !go_str.p.is_null() && (go_str.p as usize) > 0x1000 {
+        println!(
+            "Detected as Go string structure: p={:?}, n={}",
+            go_str.p, go_str.n
+        );
         // This looks like a Go string structure
         // Cast from *const i8 to *const u8 (safe since both are 8-bit)
         let u8_ptr = go_str.p as *const u8;
         let slice = std::slice::from_raw_parts(u8_ptr, go_str.n as usize);
         match std::str::from_utf8(slice) {
-            Ok(s) => return s.to_string(),
-            Err(_) => {
+            Ok(s) => {
+                println!("Successfully read Go string: {:?}", s);
+                return s.to_string();
+            }
+            Err(e) => {
+                println!("UTF-8 conversion failed: {:?}", e);
                 // If UTF-8 conversion fails, try as C string instead
                 // (fall through to C string reading below)
             }
         }
+    } else {
+        println!(
+            "Doesn't look like Go string structure (n={}, p={:?})",
+            go_str.n, go_str.p
+        );
     }
 
     println!("fallback to reading as C string");
+
+    // Debug: read first few bytes as raw bytes
+    let first_bytes = std::slice::from_raw_parts(ptr as *const u8, 16.min(256));
+    println!("First 16 bytes as raw: {:?}", first_bytes);
 
     // Fall back to reading as C string (null-terminated)
     match CStr::from_ptr(ptr).to_str() {
