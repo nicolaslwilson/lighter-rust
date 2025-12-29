@@ -367,8 +367,9 @@ impl FFISigner {
             println!("result.txHash: {:?}", result.txHash);
             println!("result.messageToSign: {:?}", result.messageToSign);
             println!("result.txType: {:?}", result.txType);
+            let has_error = !result.err.is_null() && (result.err as usize) > 0x1000;
 
-            if !result.err.is_null() {
+            if has_error {
                 println!("result.err is not null");
                 let error_str = CStr::from_ptr(result.err).to_string_lossy().to_string();
 
