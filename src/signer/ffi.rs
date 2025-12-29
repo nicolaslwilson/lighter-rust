@@ -339,12 +339,12 @@ impl FFISigner {
                     let err_ptr = result.err as *mut libc::c_void;
                     pointers.push(err_ptr);
                 }
-                if !result.txInfo.is_null() && (result.txInfo as usize) > 0x1000 {
-                    let tx_info_ptr = result.txInfo as *mut libc::c_void;
-                    if !pointers.contains(&tx_info_ptr) {
-                        pointers.push(tx_info_ptr);
-                    }
-                }
+                // if !result.txInfo.is_null() && (result.txInfo as usize) > 0x1000 {
+                //     let tx_info_ptr = result.txInfo as *mut libc::c_void;
+                //     if !pointers.contains(&tx_info_ptr) {
+                //         pointers.push(tx_info_ptr);
+                //     }
+                // }
                 if !result.txHash.is_null() && (result.txHash as usize) > 0x1000 {
                     let tx_hash_ptr = result.txHash as *mut libc::c_void;
                     if !pointers.contains(&tx_hash_ptr) {
@@ -384,17 +384,29 @@ impl FFISigner {
             }
 
             let tx_info_str = if result.txInfo.is_null() || (result.txInfo as usize) <= 0x1000 {
+                println!("result.txInfo is null");
                 String::new()
             } else {
                 CStr::from_ptr(result.txInfo).to_string_lossy().to_string()
             };
             println!("tx_info_str: {:?}", tx_info_str);
             let tx_hash_str = if result.txHash.is_null() || (result.txHash as usize) <= 0x1000 {
+                println!("result.txHash is null");
                 String::new()
             } else {
                 CStr::from_ptr(result.txHash).to_string_lossy().to_string()
             };
             println!("tx_hash_str: {:?}", tx_hash_str);
+            let message_to_sign_str =
+                if result.messageToSign.is_null() || (result.messageToSign as usize) <= 0x1000 {
+                    println!("result.messageToSign is null");
+                    String::new()
+                } else {
+                    CStr::from_ptr(result.messageToSign)
+                        .to_string_lossy()
+                        .to_string()
+                };
+            println!("message_to_sign_str: {:?}", message_to_sign_str);
             // Collect all unique pointers and free them once
             let pointers_to_free = collect_unique_pointers();
             println!("pointers_to_free: {:?}", pointers_to_free);
