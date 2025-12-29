@@ -59,7 +59,7 @@ impl FFISigner {
         Ok(signer)
     }
 
-    pub fn get_tx_data(&self, data: TxData, nonce: i64) -> Result<String> {
+    pub fn get_tx_data(&self, data: TxData, nonce: i64) -> Result<[String; 3]> {
         let res = match data {
             TxData::ChangePubKey(data) => {
                 let c_pubkey = CString::new(data.new_pubk.as_str())
@@ -306,9 +306,14 @@ impl FFISigner {
         unsafe {
             if !result.err.is_null() {
                 let error_str = CStr::from_ptr(result.err).to_string_lossy().to_string();
-                libc::free(result.err as *mut libc::c_void);
+                let err_ptr = result.err as *mut libc::c_void;
+                libc::free(err_ptr);
+                // Only free str_ if it's different from err to avoid double free
                 if !result.str_.is_null() {
-                    libc::free(result.str_ as *mut libc::c_void);
+                    let str_ptr = result.str_ as *mut libc::c_void;
+                    if str_ptr != err_ptr {
+                        libc::free(str_ptr);
+                    }
                 }
                 return Err(LighterError::Signing(error_str));
             }
@@ -324,37 +329,60 @@ impl FFISigner {
         }
     }
 
-    fn parse_signed_tx_result(&self, result: ffisigner::SignedTxResponse) -> Result<String> {
+    fn parse_signed_tx_result(&self, result: ffisigner::SignedTxResponse) -> Result<[String; 3]> {
         unsafe {
-            if !result.err.is_null() {
-                let error_str = CStr::from_ptr(result.err).to_string_lossy().to_string();
-                libc::free(result.err as *mut libc::c_void);
+            // Helper to collect unique pointers to avoid double free
+            let collect_unique_pointers = |err_ptr: *mut libc::c_void| -> Vec<*mut libc::c_void> {
+                let mut pointers = Vec::new();
+                if !err_ptr.is_null() {
+                    pointers.push(err_ptr);
+                }
                 if !result.txInfo.is_null() {
-                    libc::free(result.txInfo as *mut libc::c_void);
+                    let tx_info_ptr = result.txInfo as *mut libc::c_void;
+                    if !pointers.contains(&tx_info_ptr) {
+                        pointers.push(tx_info_ptr);
+                    }
                 }
                 if !result.txHash.is_null() {
-                    libc::free(result.txHash as *mut libc::c_void);
+                    let tx_hash_ptr = result.txHash as *mut libc::c_void;
+                    if !pointers.contains(&tx_hash_ptr) {
+                        pointers.push(tx_hash_ptr);
+                    }
                 }
                 if !result.messageToSign.is_null() {
-                    libc::free(result.messageToSign as *mut libc::c_void);
+                    let msg_ptr = result.messageToSign as *mut libc::c_void;
+                    if !pointers.contains(&msg_ptr) {
+                        pointers.push(msg_ptr);
+                    }
                 }
+                pointers
+            };
+
+            if !result.err.is_null() {
+                let error_str = CStr::from_ptr(result.err).to_string_lossy().to_string();
+                let err_ptr = result.err as *mut libc::c_void;
+
+                // Collect all unique pointers and free them once
+                let pointers_to_free = collect_unique_pointers(err_ptr);
+                for ptr in pointers_to_free {
+                    libc::free(ptr);
+                }
+
                 return Err(LighterError::Signing(error_str));
             }
 
-            if result.txInfo.is_null() {
-                return Err(LighterError::Signing("Null result".to_string()));
+            let tx_info_str = CStr::from_ptr(result.txInfo).to_string_lossy().to_string();
+            let tx_hash_str = CStr::from_ptr(result.txHash).to_string_lossy().to_string();
+
+            let tx_info_ptr = result.txInfo as *mut libc::c_void;
+
+            // Collect all unique pointers and free them once
+            let pointers_to_free = collect_unique_pointers(tx_info_ptr);
+            for ptr in pointers_to_free {
+                libc::free(ptr);
             }
 
-            let value_str = CStr::from_ptr(result.txInfo).to_string_lossy().to_string();
-            libc::free(result.txInfo as *mut libc::c_void);
-            if !result.txHash.is_null() {
-                libc::free(result.txHash as *mut libc::c_void);
-            }
-            if !result.messageToSign.is_null() {
-                libc::free(result.messageToSign as *mut libc::c_void);
-            }
-
-            Ok(value_str)
+            Ok([result.txType.to_string(), tx_info_str, tx_hash_str])
         }
     }
 }

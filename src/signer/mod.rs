@@ -165,8 +165,13 @@ impl Signer {
     }
 
     fn sign_tx_data(&self, tx_data: TxData, nonce: i64) -> Result<TxInfo> {
-        let tx_body = self.ffi.get_tx_data(tx_data, nonce)?;
+        let [tx_type, tx_body, tx_hash] = self.ffi.get_tx_data(tx_data, nonce)?;
         let tx_json = serde_json::from_str::<Value>(&tx_body).unwrap();
+
+        println!("tx_type: {}", tx_type);
+        println!("tx_body: {}", tx_body);
+        println!("tx_hash: {}", tx_hash);
+        println!("tx_json: {:?}", tx_json);
 
         let mut tx_info = TxInfo {
             data: None,
