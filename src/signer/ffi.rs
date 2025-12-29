@@ -62,7 +62,6 @@ impl FFISigner {
     pub fn get_tx_data(&self, data: TxData, nonce: i64) -> Result<[String; 3]> {
         let res = match data {
             TxData::ChangePubKey(data) => {
-                // Keep CString alive during the FFI call
                 let c_pubkey = CString::new(data.new_pubk.as_str())
                     .map_err(|_| LighterError::Signing("Invalid key".to_string()))?;
                 unsafe {
@@ -92,8 +91,6 @@ impl FFISigner {
                 )
             },
             TxData::SignCreateGroupedOrders(mut data) => {
-                // Ensure the vector stays alive during the FFI call
-                // The vector will stay alive as long as `data` is in scope
                 let orders_len = data.orders.len();
                 let orders_ptr = data.orders.as_mut_ptr();
                 unsafe {
@@ -154,27 +151,24 @@ impl FFISigner {
                     self.account_index as c_longlong,
                 )
             },
-            TxData::SignTransfer(data) => {
+            TxData::SignTransfer(data) => unsafe {
                 let memo = str::from_utf8(&data.memo)
                     .map_err(|_| LighterError::Generic("Invalid memo (non UTF-8)".to_string()))?;
-                // Keep CString alive during the FFI call
                 let memo = CString::new(memo)
                     .map_err(|_| LighterError::Signing("Invalid memo".to_string()))?;
-                unsafe {
-                    ffisigner::SignTransfer(
-                        data.to_account_index,
-                        data.asset_index,
-                        data.from_route_type,
-                        data.to_route_type,
-                        data.amount,
-                        data.fee,
-                        memo.as_ptr() as *mut i8,
-                        nonce,
-                        self.api_key_index as c_int,
-                        self.account_index as c_longlong,
-                    )
-                }
-            }
+                ffisigner::SignTransfer(
+                    data.to_account_index,
+                    data.asset_index,
+                    data.from_route_type,
+                    data.to_route_type,
+                    data.amount,
+                    data.fee,
+                    memo.as_ptr() as *mut i8,
+                    nonce,
+                    self.api_key_index as c_int,
+                    self.account_index as c_longlong,
+                )
+            },
             TxData::SignCreatePublicPool(data) => unsafe {
                 ffisigner::SignCreatePublicPool(
                     data.operator_fee,
@@ -338,9 +332,11 @@ impl FFISigner {
     fn parse_signed_tx_result(&self, result: ffisigner::SignedTxResponse) -> Result<[String; 3]> {
         unsafe {
             // Helper to collect unique pointers to avoid double free
-            let collect_unique_pointers = |err_ptr: *mut libc::c_void| -> Vec<*mut libc::c_void> {
+            let collect_unique_pointers = || -> Vec<*mut libc::c_void> {
                 let mut pointers = Vec::new();
-                if !err_ptr.is_null() {
+
+                if !result.err.is_null() {
+                    let err_ptr = result.err as *mut libc::c_void;
                     pointers.push(err_ptr);
                 }
                 if !result.txInfo.is_null() {
@@ -361,15 +357,23 @@ impl FFISigner {
                         pointers.push(msg_ptr);
                     }
                 }
+
+                println!("pointers: {:?}", pointers);
                 pointers
             };
 
+            println!("result.err: {:?}", result.err);
+            println!("result.txInfo: {:?}", result.txInfo);
+            println!("result.txHash: {:?}", result.txHash);
+            println!("result.messageToSign: {:?}", result.messageToSign);
+            println!("result.txType: {:?}", result.txType);
+
             if !result.err.is_null() {
                 let error_str = CStr::from_ptr(result.err).to_string_lossy().to_string();
-                let err_ptr = result.err as *mut libc::c_void;
 
+                println!("error_str: {:?}", error_str);
                 // Collect all unique pointers and free them once
-                let pointers_to_free = collect_unique_pointers(err_ptr);
+                let pointers_to_free = collect_unique_pointers();
                 for ptr in pointers_to_free {
                     libc::free(ptr);
                 }
@@ -377,21 +381,21 @@ impl FFISigner {
                 return Err(LighterError::Signing(error_str));
             }
 
-            // Handle null pointers gracefully by returning empty strings
             let tx_info_str = if result.txInfo.is_null() {
                 String::new()
             } else {
                 CStr::from_ptr(result.txInfo).to_string_lossy().to_string()
             };
-
+            println!("tx_info_str: {:?}", tx_info_str);
             let tx_hash_str = if result.txHash.is_null() {
                 String::new()
             } else {
                 CStr::from_ptr(result.txHash).to_string_lossy().to_string()
             };
-
+            println!("tx_hash_str: {:?}", tx_hash_str);
             // Collect all unique pointers and free them once
-            let pointers_to_free = collect_unique_pointers(std::ptr::null_mut());
+            let pointers_to_free = collect_unique_pointers();
+            println!("pointers_to_free: {:?}", pointers_to_free);
             for ptr in pointers_to_free {
                 libc::free(ptr);
             }
