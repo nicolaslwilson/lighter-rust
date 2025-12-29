@@ -369,6 +369,7 @@ impl FFISigner {
             println!("result.txType: {:?}", result.txType);
 
             if !result.err.is_null() {
+                println!("result.err is not null");
                 let error_str = CStr::from_ptr(result.err).to_string_lossy().to_string();
 
                 println!("error_str: {:?}", error_str);
