@@ -44,6 +44,8 @@ unsafe fn read_go_or_c_string(ptr: *mut i8) -> String {
         }
     }
 
+    println!("fallback to reading as C string");
+
     // Fall back to reading as C string (null-terminated)
     match CStr::from_ptr(ptr).to_str() {
         Ok(s) => s.to_string(),
