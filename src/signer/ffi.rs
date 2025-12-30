@@ -41,29 +41,52 @@ unsafe fn read_go_or_c_string(ptr: *mut i8) -> String {
             "Detected as Go string structure: p={:?}, n={}",
             go_str.p, go_str.n
         );
-        // This looks like a Go string structure
-        // Cast from *const i8 to *const u8 (safe since both are 8-bit)
-        let u8_ptr = go_str.p as *const u8;
-        let slice = std::slice::from_raw_parts(u8_ptr, go_str.n as usize);
 
-        // Try UTF-8 first, but also handle lossy conversion for binary data
-        match std::str::from_utf8(slice) {
-            Ok(s) => {
-                println!("Successfully read Go string: {:?}", s);
-                return s.to_string();
-            }
-            Err(e) => {
-                println!(
-                    "UTF-8 conversion failed at byte {}: {:?}",
-                    e.valid_up_to(),
-                    e
-                );
-                // Try to read as much valid UTF-8 as possible, then use lossy conversion
-                let valid_part = std::str::from_utf8(&slice[..e.valid_up_to()]).unwrap_or("");
-                let remaining = String::from_utf8_lossy(&slice[e.valid_up_to()..]);
-                let result = format!("{}{}", valid_part, remaining);
-                println!("Using lossy conversion: {:?}", result);
-                return result;
+        // Debug: check first few bytes at the data pointer
+        let data_ptr = go_str.p as *const u8;
+        let preview_bytes = std::slice::from_raw_parts(data_ptr, go_str.n.min(32) as usize);
+        println!(
+            "First {} bytes at data pointer: {:?}",
+            preview_bytes.len(),
+            preview_bytes
+        );
+
+        // Check if the data looks like text (mostly printable ASCII/UTF-8)
+        // If it starts with lots of null bytes or control characters, it's probably binary
+        let null_count = preview_bytes.iter().take(16).filter(|&&b| b == 0).count();
+        let printable_count = preview_bytes
+            .iter()
+            .take(32)
+            .filter(|&&b| b >= 32 && b < 127)
+            .count();
+
+        // If there are many nulls or very few printable characters, it's probably binary
+        if null_count >= 8 || printable_count < 4 {
+            println!("Data appears to be binary (null_count={}, printable_count={}), treating as C string instead", null_count, printable_count);
+            // Fall through to C string reading
+        } else {
+            // This looks like a Go string structure with text data
+            // Cast from *const i8 to *const u8 (safe since both are 8-bit)
+            let u8_ptr = go_str.p as *const u8;
+            let slice = std::slice::from_raw_parts(u8_ptr, go_str.n as usize);
+
+            // Try UTF-8 first
+            match std::str::from_utf8(slice) {
+                Ok(s) => {
+                    println!("Successfully read Go string: {:?}", s);
+                    return s.to_string();
+                }
+                Err(e) => {
+                    println!(
+                        "UTF-8 conversion failed at byte {}: {:?}",
+                        e.valid_up_to(),
+                        e
+                    );
+                    // If UTF-8 conversion fails, this might be binary data
+                    // Try reading as C string from the original pointer instead
+                    println!("Falling back to reading original pointer as C string");
+                    // Fall through to C string reading below
+                }
             }
         }
     } else {
@@ -172,6 +195,7 @@ impl FFISigner {
                 }
             }
             TxData::CreateOrder(data) => unsafe {
+                println!("SignCreateOrder");
                 ffisigner::SignCreateOrder(
                     data.market_index,
                     data.client_order_index,
@@ -328,6 +352,8 @@ impl FFISigner {
             },
         };
 
+        println!("res: {:?}", res);
+
         self.parse_signed_tx_result(res)
     }
 
@@ -429,6 +455,14 @@ impl FFISigner {
 
     fn parse_signed_tx_result(&self, result: ffisigner::SignedTxResponse) -> Result<[String; 3]> {
         unsafe {
+            let cstr = CStr::from_ptr(result.txInfo);
+
+            println!("cstr: {:?}", cstr);
+            println!("cstr.to_string_lossy(): {:?}", cstr.to_string_lossy());
+            println!("cstr.to_string(): {:?}", cstr.to_str());
+            println!("cstr.to_bytes(): {:?}", cstr.to_bytes());
+
+            let tx_info_str = cstr.to_string_lossy().to_string();
             println!("result.err: {:?}", result.err);
             println!("result.txInfo: {:?}", result.txInfo);
             println!("result.txHash: {:?}", result.txHash);
