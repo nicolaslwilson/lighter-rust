@@ -366,11 +366,8 @@ impl FFISigner {
 
             let tx_info_str = read_c_string(result.txInfo);
             let tx_hash_str = read_c_string(result.txHash);
-            let message_to_sign_str = read_c_string(result.messageToSign);
+            let message_to_sign_str = read_c_string(result.messageToSign); // Read strings - all are C strings created with C.CString() in Go
 
-            // Read strings - all are C strings created with C.CString() in Go
-            let tx_info_str = read_c_string(result.txInfo);
-            let tx_hash_str = read_c_string(result.txHash);
             // Note: messageToSign is available in result.messageToSign but not returned in the array
 
             Ok((
