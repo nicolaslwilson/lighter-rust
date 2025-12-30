@@ -457,12 +457,9 @@ impl FFISigner {
         unsafe {
             let cstr = CStr::from_ptr(result.txInfo);
 
-            println!("cstr: {:?}", cstr);
-            println!("cstr.to_string_lossy(): {:?}", cstr.to_string_lossy());
             println!("cstr.to_string(): {:?}", cstr.to_str());
             println!("cstr.to_bytes(): {:?}", cstr.to_bytes());
 
-            let tx_info_str = cstr.to_string_lossy().to_string();
             println!("result.err: {:?}", result.err);
             println!("result.txInfo: {:?}", result.txInfo);
             println!("result.txHash: {:?}", result.txHash);
