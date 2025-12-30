@@ -6,103 +6,15 @@ use crate::signer::data::TxData;
 use std::ffi::{c_int, c_longlong, CStr, CString};
 use std::sync::{Arc, RwLock};
 
-// Go string structure as defined in cgo
-// typedef struct { const char *p; ptrdiff_t n; } _GoString_;
-#[repr(C)]
-struct GoString {
-    p: *const i8,
-    n: isize,
-}
-
-// Helper function to read a string from a pointer that might be:
-// 1. A Go string structure (GoString with p and n fields)
-// 2. A C string (null-terminated)
-// Returns empty string if pointer is null or invalid
-unsafe fn read_go_or_c_string(ptr: *mut i8) -> String {
+// Helper function to read a C string (null-terminated) from a pointer
+// The Go code uses C.CString() which creates null-terminated C strings
+// Returns empty string if pointer is null, invalid, or contains only control characters
+unsafe fn read_c_string(ptr: *mut i8) -> String {
     if ptr.is_null() || (ptr as usize) <= 0x1000 {
         return String::new();
     }
 
-    // Try reading as Go string structure first
-    let go_str_ptr = ptr as *const GoString;
-    let go_str = &*go_str_ptr;
-
-    // Debug: print what we're reading
-    println!(
-        "ptr: {:?}, go_str.p: {:?}, go_str.n: {}",
-        ptr, go_str.p, go_str.n
-    );
-
-    // Check if this looks like a Go string structure:
-    // - n should be reasonable (positive and not too large, e.g., < 1MB)
-    // - p should be a valid pointer
-    if go_str.n > 0 && go_str.n < 1_000_000 && !go_str.p.is_null() && (go_str.p as usize) > 0x1000 {
-        println!(
-            "Detected as Go string structure: p={:?}, n={}",
-            go_str.p, go_str.n
-        );
-
-        // Debug: check first few bytes at the data pointer
-        let data_ptr = go_str.p as *const u8;
-        let preview_bytes = std::slice::from_raw_parts(data_ptr, go_str.n.min(32) as usize);
-        println!(
-            "First {} bytes at data pointer: {:?}",
-            preview_bytes.len(),
-            preview_bytes
-        );
-
-        // Check if the data looks like text (mostly printable ASCII/UTF-8)
-        // If it starts with lots of null bytes or control characters, it's probably binary
-        let null_count = preview_bytes.iter().take(16).filter(|&&b| b == 0).count();
-        let printable_count = preview_bytes
-            .iter()
-            .take(32)
-            .filter(|&&b| b >= 32 && b < 127)
-            .count();
-
-        // If there are many nulls or very few printable characters, it's probably binary
-        if null_count >= 8 || printable_count < 4 {
-            println!("Data appears to be binary (null_count={}, printable_count={}), treating as C string instead", null_count, printable_count);
-            // Fall through to C string reading
-        } else {
-            // This looks like a Go string structure with text data
-            // Cast from *const i8 to *const u8 (safe since both are 8-bit)
-            let u8_ptr = go_str.p as *const u8;
-            let slice = std::slice::from_raw_parts(u8_ptr, go_str.n as usize);
-
-            // Try UTF-8 first
-            match std::str::from_utf8(slice) {
-                Ok(s) => {
-                    println!("Successfully read Go string: {:?}", s);
-                    return s.to_string();
-                }
-                Err(e) => {
-                    println!(
-                        "UTF-8 conversion failed at byte {}: {:?}",
-                        e.valid_up_to(),
-                        e
-                    );
-                    // If UTF-8 conversion fails, this might be binary data
-                    // Try reading as C string from the original pointer instead
-                    println!("Falling back to reading original pointer as C string");
-                    // Fall through to C string reading below
-                }
-            }
-        }
-    } else {
-        println!(
-            "Doesn't look like Go string structure (n={}, p={:?})",
-            go_str.n, go_str.p
-        );
-    }
-
-    println!("fallback to reading as C string");
-
-    // Debug: read first few bytes as raw bytes
-    let first_bytes = std::slice::from_raw_parts(ptr as *const u8, 16.min(256));
-    println!("First 16 bytes as raw: {:?}", first_bytes);
-
-    // Fall back to reading as C string (null-terminated)
+    // Read as C string (null-terminated)
     let c_str = CStr::from_ptr(ptr);
     let c_str_bytes = c_str.to_bytes();
 
@@ -465,23 +377,15 @@ impl FFISigner {
             let has_error = !result.err.is_null() && (result.err as usize) > 0x1000;
 
             if has_error {
-                println!("result.err is not null");
-                let error_str = read_go_or_c_string(result.err);
-                println!("error_str: {:?}", error_str);
-
+                let error_str = read_c_string(result.err);
                 // Note: We don't free Go-allocated memory - Go's GC handles it
                 return Err(LighterError::Signing(error_str));
             }
 
-            // Read strings - they might be Go string structures or C strings
-            let tx_info_str = read_go_or_c_string(result.txInfo);
-            println!("tx_info_str: {:?}", tx_info_str);
-
-            let tx_hash_str = read_go_or_c_string(result.txHash);
-            println!("tx_hash_str: {:?}", tx_hash_str);
-
-            let message_to_sign_str = read_go_or_c_string(result.messageToSign);
-            println!("message_to_sign_str: {:?}", message_to_sign_str);
+            // Read strings - all are C strings created with C.CString() in Go
+            let tx_info_str = read_c_string(result.txInfo);
+            let tx_hash_str = read_c_string(result.txHash);
+            // Note: messageToSign is available in result.messageToSign but not returned in the array
 
             // Note: We don't free Go-allocated memory - Go's GC handles it automatically
 
