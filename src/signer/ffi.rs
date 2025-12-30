@@ -11,7 +11,7 @@ use std::sync::{Arc, RwLock};
 // Returns empty string if pointer is null, invalid, or contains only control characters
 unsafe fn read_c_string(ptr: *mut i8) -> Option<String> {
     println!("ptr: {:?}", ptr);
-    if ptr.is_null() || ptr.addr() == 0x2 {
+    if ptr.is_null() {
         return None;
     }
 
@@ -359,11 +359,19 @@ impl FFISigner {
             println!("result.txHash: {:?}", result.txHash);
             println!("result.messageToSign: {:?}", result.messageToSign);
             println!("result.txType: {:?}", result.txType);
-            let error_str = read_c_string(result.err);
-            if let Some(error_str) = error_str {
-                return Err(LighterError::Signing(error_str));
+
+            // Check for error first - if err is set, only read and free the error string
+            // and return early without touching other fields
+            if !result.err.is_null() {
+                println!("result.err is not null");
+                let error_str = read_c_string(result.err);
+
+                if let Some(error_str) = error_str {
+                    return Err(LighterError::Signing(error_str));
+                }
             }
 
+            // Only read other fields if there's no error
             let tx_info_str = read_c_string(result.txInfo);
             let tx_hash_str = read_c_string(result.txHash);
             let message_to_sign_str = read_c_string(result.messageToSign); // Read strings - all are C strings created with C.CString() in Go
