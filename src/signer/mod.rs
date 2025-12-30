@@ -82,7 +82,7 @@ impl TryFrom<&LighterConfig> for FFISigner {
             &config.base_url,
             api_key_private.clone(),
             api_key_index,
-            account_index,
+            account_index as i64,
         )
     }
 }
@@ -165,7 +165,7 @@ impl Signer {
     }
 
     fn sign_tx_data(&self, tx_data: TxData, nonce: i64) -> Result<TxInfo> {
-        let [tx_type, tx_body, tx_hash] = self.ffi.get_tx_data(tx_data, nonce)?;
+        let (tx_type, tx_body, tx_hash, message_to_sign) = self.ffi.get_tx_data(tx_data, nonce)?;
         let tx_json = serde_json::from_str::<Value>(&tx_body).unwrap();
 
         println!("tx_type: {}", tx_type);
@@ -179,9 +179,9 @@ impl Signer {
         };
 
         // check we actually have something to sign
-        if let Some(msg) = tx_json["MessageToSign"].as_str() {
+        if !message_to_sign.is_empty() {
             // sign
-            let sig = self.sign_message(msg)?;
+            let sig = self.sign_message(&message_to_sign)?;
 
             // update the data
             let mut tx_json = tx_json.clone();
@@ -191,7 +191,7 @@ impl Signer {
             }
 
             tx_info.data = Some(TxInfoData {
-                message: msg.into(),
+                message: message_to_sign,
                 signature: sig,
             });
             tx_info.payload = serde_json::to_string(&tx_json).unwrap();

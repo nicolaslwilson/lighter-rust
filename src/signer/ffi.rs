@@ -9,34 +9,16 @@ use std::sync::{Arc, RwLock};
 // Helper function to read a C string (null-terminated) from a pointer
 // The Go code uses C.CString() which creates null-terminated C strings
 // Returns empty string if pointer is null, invalid, or contains only control characters
-unsafe fn read_c_string(ptr: *mut i8) -> String {
-    if ptr.is_null() || (ptr as usize) <= 0x1000 {
-        return String::new();
+unsafe fn read_c_string(ptr: *mut i8) -> Option<String> {
+    println!("ptr: {:?}", ptr);
+    if ptr.is_null() || ptr.addr() == 0x2 {
+        return None;
     }
 
     // Read as C string (null-terminated)
-    let c_str = CStr::from_ptr(ptr);
-    let c_str_bytes = c_str.to_bytes();
-
-    // Check if this is a very short C string with control characters (likely an error code or flag)
-    // If the string is 1-2 bytes and contains only control characters or small digits, it's probably not a real string
-    if c_str_bytes.len() <= 2 {
-        let is_control_or_small_digit = c_str_bytes
-            .iter()
-            .all(|&b| (b < 32 && b != 0) || (b >= b'0' && b <= b'9' && b <= b'9'));
-        if is_control_or_small_digit {
-            println!(
-                "Short control/digit string detected (len={}), returning empty",
-                c_str_bytes.len()
-            );
-            return String::new();
-        }
-    }
-
-    match c_str.to_str() {
-        Ok(s) => s.to_string(),
-        Err(_) => c_str.to_string_lossy().to_string(),
-    }
+    let c_str = CStr::from_ptr(ptr).to_string_lossy().to_string();
+    libc::free(ptr as *mut libc::c_void);
+    Some(c_str)
 }
 
 pub mod ffisigner {
@@ -62,7 +44,7 @@ pub struct FFISigner {
     private_key: String,
     chain_id: c_int,
     api_key_index: c_int,
-    account_index: c_int,
+    account_index: c_longlong,
     // We should expect more reads than actual writes since the token will most likely have a long expiration
     // In case this does not happen, the implementation could be changed to have a Mutex
     // By using the Arc we ensure to have interior mutability
@@ -74,7 +56,7 @@ impl FFISigner {
         url: &str,
         private_key: SecretString,
         api_key_index: i32,
-        account_index: i32,
+        account_index: i64,
     ) -> Result<Self> {
         let chain_id = if url.contains("mainnet") { 304 } else { 300 };
         let clean_key = private_key.expose_secret().trim_start_matches("0x");
@@ -84,7 +66,7 @@ impl FFISigner {
             private_key: clean_key.to_string(),
             chain_id: chain_id as c_int,
             api_key_index: api_key_index as c_int,
-            account_index: account_index as c_int,
+            account_index: account_index as c_longlong,
             auth_token: Arc::new(RwLock::new(None)),
         };
 
@@ -92,7 +74,7 @@ impl FFISigner {
         Ok(signer)
     }
 
-    pub fn get_tx_data(&self, data: TxData, nonce: i64) -> Result<[String; 3]> {
+    pub fn get_tx_data(&self, data: TxData, nonce: i64) -> Result<(u8, String, String, String)> {
         let res = match data {
             TxData::ChangePubKey(data) => {
                 let c_pubkey = CString::new(data.new_pubk.as_str())
@@ -107,6 +89,7 @@ impl FFISigner {
                 }
             }
             TxData::CreateOrder(data) => unsafe {
+                println!("data: {:?}", data);
                 ffisigner::SignCreateOrder(
                     data.market_index,
                     data.client_order_index,
@@ -263,6 +246,8 @@ impl FFISigner {
             },
         };
 
+        println!("res: {:?}", res);
+
         self.parse_signed_tx_result(res)
     }
 
@@ -362,34 +347,38 @@ impl FFISigner {
         }
     }
 
-    fn parse_signed_tx_result(&self, result: ffisigner::SignedTxResponse) -> Result<[String; 3]> {
+    fn parse_signed_tx_result(
+        &self,
+        result: ffisigner::SignedTxResponse,
+    ) -> Result<(u8, String, String, String)> {
         unsafe {
-            let cstr = CStr::from_ptr(result.txInfo);
-            println!("hello");
-
-            println!("cstr.to_bytes(): {:?}", cstr.to_bytes());
+            println!("in parse");
 
             println!("result.err: {:?}", result.err);
             println!("result.txInfo: {:?}", result.txInfo);
             println!("result.txHash: {:?}", result.txHash);
             println!("result.messageToSign: {:?}", result.messageToSign);
             println!("result.txType: {:?}", result.txType);
-            let has_error = !result.err.is_null() && (result.err as usize) > 0x1000;
-
-            if has_error {
-                let error_str = read_c_string(result.err);
-                // Note: We don't free Go-allocated memory - Go's GC handles it
+            let error_str = read_c_string(result.err);
+            if let Some(error_str) = error_str {
                 return Err(LighterError::Signing(error_str));
             }
+
+            let tx_info_str = read_c_string(result.txInfo);
+            let tx_hash_str = read_c_string(result.txHash);
+            let message_to_sign_str = read_c_string(result.messageToSign);
 
             // Read strings - all are C strings created with C.CString() in Go
             let tx_info_str = read_c_string(result.txInfo);
             let tx_hash_str = read_c_string(result.txHash);
             // Note: messageToSign is available in result.messageToSign but not returned in the array
 
-            // Note: We don't free Go-allocated memory - Go's GC handles it automatically
-
-            Ok([result.txType.to_string(), tx_info_str, tx_hash_str])
+            Ok((
+                result.txType,
+                tx_info_str.unwrap_or(String::new()),
+                tx_hash_str.unwrap_or(String::new()),
+                message_to_sign_str.unwrap_or(String::new()),
+            ))
         }
     }
 }
