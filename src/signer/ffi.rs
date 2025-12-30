@@ -195,7 +195,6 @@ impl FFISigner {
                 }
             }
             TxData::CreateOrder(data) => unsafe {
-                println!("SignCreateOrder");
                 ffisigner::SignCreateOrder(
                     data.market_index,
                     data.client_order_index,
@@ -352,8 +351,6 @@ impl FFISigner {
             },
         };
 
-        println!("res: {:?}", res);
-
         self.parse_signed_tx_result(res)
     }
 
@@ -456,6 +453,7 @@ impl FFISigner {
     fn parse_signed_tx_result(&self, result: ffisigner::SignedTxResponse) -> Result<[String; 3]> {
         unsafe {
             let cstr = CStr::from_ptr(result.txInfo);
+            println!("hello");
 
             println!("cstr.to_bytes(): {:?}", cstr.to_bytes());
 
