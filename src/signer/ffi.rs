@@ -45,15 +45,25 @@ unsafe fn read_go_or_c_string(ptr: *mut i8) -> String {
         // Cast from *const i8 to *const u8 (safe since both are 8-bit)
         let u8_ptr = go_str.p as *const u8;
         let slice = std::slice::from_raw_parts(u8_ptr, go_str.n as usize);
+
+        // Try UTF-8 first, but also handle lossy conversion for binary data
         match std::str::from_utf8(slice) {
             Ok(s) => {
                 println!("Successfully read Go string: {:?}", s);
                 return s.to_string();
             }
             Err(e) => {
-                println!("UTF-8 conversion failed: {:?}", e);
-                // If UTF-8 conversion fails, try as C string instead
-                // (fall through to C string reading below)
+                println!(
+                    "UTF-8 conversion failed at byte {}: {:?}",
+                    e.valid_up_to(),
+                    e
+                );
+                // Try to read as much valid UTF-8 as possible, then use lossy conversion
+                let valid_part = std::str::from_utf8(&slice[..e.valid_up_to()]).unwrap_or("");
+                let remaining = String::from_utf8_lossy(&slice[e.valid_up_to()..]);
+                let result = format!("{}{}", valid_part, remaining);
+                println!("Using lossy conversion: {:?}", result);
+                return result;
             }
         }
     } else {
@@ -70,9 +80,27 @@ unsafe fn read_go_or_c_string(ptr: *mut i8) -> String {
     println!("First 16 bytes as raw: {:?}", first_bytes);
 
     // Fall back to reading as C string (null-terminated)
-    match CStr::from_ptr(ptr).to_str() {
+    let c_str = CStr::from_ptr(ptr);
+    let c_str_bytes = c_str.to_bytes();
+
+    // Check if this is a very short C string with control characters (likely an error code or flag)
+    // If the string is 1-2 bytes and contains only control characters or small digits, it's probably not a real string
+    if c_str_bytes.len() <= 2 {
+        let is_control_or_small_digit = c_str_bytes
+            .iter()
+            .all(|&b| (b < 32 && b != 0) || (b >= b'0' && b <= b'9' && b <= b'9'));
+        if is_control_or_small_digit {
+            println!(
+                "Short control/digit string detected (len={}), returning empty",
+                c_str_bytes.len()
+            );
+            return String::new();
+        }
+    }
+
+    match c_str.to_str() {
         Ok(s) => s.to_string(),
-        Err(_) => CStr::from_ptr(ptr).to_string_lossy().to_string(),
+        Err(_) => c_str.to_string_lossy().to_string(),
     }
 }
 
