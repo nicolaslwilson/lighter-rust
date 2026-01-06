@@ -10,7 +10,6 @@ use std::sync::{Arc, RwLock};
 // The Go code uses C.CString() which creates null-terminated C strings
 // Returns empty string if pointer is null, invalid, or contains only control characters
 unsafe fn read_c_string(ptr: *mut i8) -> Option<String> {
-    println!("ptr: {:?}", ptr);
     if ptr.is_null() {
         return None;
     }
@@ -89,7 +88,6 @@ impl FFISigner {
                 }
             }
             TxData::CreateOrder(data) => unsafe {
-                println!("data: {:?}", data);
                 ffisigner::SignCreateOrder(
                     data.market_index,
                     data.client_order_index,
@@ -246,8 +244,6 @@ impl FFISigner {
             },
         };
 
-        println!("res: {:?}", res);
-
         self.parse_signed_tx_result(res)
     }
 
@@ -352,18 +348,9 @@ impl FFISigner {
         result: ffisigner::SignedTxResponse,
     ) -> Result<(u8, String, String, String)> {
         unsafe {
-            println!("in parse");
-
-            println!("result.err: {:?}", result.err);
-            println!("result.txInfo: {:?}", result.txInfo);
-            println!("result.txHash: {:?}", result.txHash);
-            println!("result.messageToSign: {:?}", result.messageToSign);
-            println!("result.txType: {:?}", result.txType);
-
             // Check for error first - if err is set, only read and free the error string
             // and return early without touching other fields
             if !result.err.is_null() {
-                println!("result.err is not null");
                 let error_str = read_c_string(result.err);
 
                 if let Some(error_str) = error_str {
