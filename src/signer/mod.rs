@@ -9,6 +9,7 @@ use alloy::{
 pub use ffi::FFISigner;
 use secrecy::ExposeSecret;
 use serde_json::Value;
+use tracing::debug;
 
 use crate::{
     config::LighterConfig,
@@ -168,10 +169,10 @@ impl Signer {
         let (tx_type, tx_body, tx_hash, message_to_sign) = self.ffi.get_tx_data(tx_data, nonce)?;
         let tx_json = serde_json::from_str::<Value>(&tx_body).unwrap();
 
-        println!("tx_type: {}", tx_type);
-        println!("tx_body: {}", tx_body);
-        println!("tx_hash: {}", tx_hash);
-        println!("tx_json: {:?}", tx_json);
+        debug!("tx_type: {}", tx_type);
+        debug!("tx_body: {}", tx_body);
+        debug!("tx_hash: {}", tx_hash);
+        debug!("tx_json: {:?}", tx_json);
 
         let mut tx_info = TxInfo {
             data: None,
