@@ -166,8 +166,7 @@ impl FFISigner {
                 )
             },
             TxData::SignTransfer(data) => unsafe {
-                let memo = str::from_utf8(&data.memo)
-                    .map_err(|_| LighterError::Generic("Invalid memo (non UTF-8)".to_string()))?;
+                let memo = hex::encode(&data.memo);
                 let memo = CString::new(memo)
                     .map_err(|_| LighterError::Signing("Invalid memo".to_string()))?;
                 ffisigner::SignTransfer(
