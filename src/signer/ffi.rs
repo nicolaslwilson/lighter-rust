@@ -3,13 +3,14 @@ use secrecy::{ExposeSecret, SecretString};
 
 use crate::error::{LighterError, Result};
 use crate::signer::data::TxData;
-use std::ffi::{c_int, c_longlong, CStr, CString};
+use std::ffi::{c_char, c_int, c_longlong, CStr, CString};
 use std::sync::{Arc, RwLock};
 
 // Helper function to read a C string (null-terminated) from a pointer
 // The Go code uses C.CString() which creates null-terminated C strings
 // Returns empty string if pointer is null, invalid, or contains only control characters
-unsafe fn read_c_string(ptr: *mut i8) -> Option<String> {
+// c_char (not i8): the char type is unsigned on aarch64 Linux
+unsafe fn read_c_string(ptr: *mut c_char) -> Option<String> {
     if ptr.is_null() {
         return None;
     }
@@ -80,7 +81,7 @@ impl FFISigner {
                     .map_err(|_| LighterError::Signing("Invalid key".to_string()))?;
                 unsafe {
                     ffisigner::SignChangePubKey(
-                        c_pubkey.as_ptr() as *mut i8,
+                        c_pubkey.as_ptr() as *mut c_char,
                         nonce,
                         self.api_key_index as c_int,
                         self.account_index as c_longlong,
@@ -176,7 +177,7 @@ impl FFISigner {
                     data.to_route_type,
                     data.amount,
                     data.fee,
-                    memo.as_ptr() as *mut i8,
+                    memo.as_ptr() as *mut c_char,
                     nonce,
                     self.api_key_index as c_int,
                     self.account_index as c_longlong,
@@ -298,8 +299,8 @@ impl FFISigner {
                 .map_err(|_| LighterError::Signing("Invalid key".to_string()))?;
 
             let res = ffisigner::CreateClient(
-                c_url.as_ptr() as *mut i8,
-                c_key.as_ptr() as *mut i8,
+                c_url.as_ptr() as *mut c_char,
+                c_key.as_ptr() as *mut c_char,
                 self.chain_id as c_int,
                 self.api_key_index as c_int,
                 self.account_index as c_longlong,
